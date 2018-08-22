@@ -1288,12 +1288,38 @@ btor_bv_sll (BtorMemMgr *mm, const BtorBitVector *a, const BtorBitVector *b)
   assert (mm);
   assert (a);
   assert (b);
-  assert (btor_util_is_power_of_2 (a->width) || a->len == b->len);
-  assert (btor_util_log_2 (a->width) == b->width || a->width == b->width);
+  assert (a->width == b->width || btor_util_is_power_of_2 (a->width));
+  assert (a->width == b->width || btor_util_log_2 (a->width) == b->width);
 
   uint64_t shift;
   shift = btor_bv_to_uint64 (b);
   return sll_bv (mm, a, shift);
+}
+
+BtorBitVector *
+btor_bv_sra (BtorMemMgr *mm, const BtorBitVector *a, const BtorBitVector *b)
+{
+  assert (mm);
+  assert (a);
+  assert (b);
+  assert (a->width == b->width || btor_util_is_power_of_2 (a->width));
+  assert (a->width == b->width || btor_util_log_2 (a->width) == b->width);
+
+  BtorBitVector *res;
+  if (btor_bv_get_bit (a, a->width - 1))
+  {
+    BtorBitVector *not_a       = btor_bv_not (mm, a);
+    BtorBitVector *not_a_srl_b = btor_bv_srl (mm, not_a, b);
+    res                        = btor_bv_not (mm, not_a_srl_b);
+    btor_bv_free (mm, not_a);
+    btor_bv_free (mm, not_a_srl_b);
+  }
+  else
+  {
+    res = btor_bv_srl (mm, a, b);
+  }
+  assert (rem_bits_zero_dbg (res));
+  return res;
 }
 
 BtorBitVector *
@@ -1302,8 +1328,8 @@ btor_bv_srl (BtorMemMgr *mm, const BtorBitVector *a, const BtorBitVector *b)
   assert (mm);
   assert (a);
   assert (b);
-  assert (btor_util_is_power_of_2 (a->width) || a->len == b->len);
-  assert (btor_util_log_2 (a->width) == b->width || a->width == b->width);
+  assert (a->width == b->width || btor_util_is_power_of_2 (a->width));
+  assert (a->width == b->width || btor_util_log_2 (a->width) == b->width);
 
   uint32_t skip, i, j, k;
   uint64_t shift;

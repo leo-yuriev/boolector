@@ -200,6 +200,10 @@ BtorBitVector *btor_bv_srl (BtorMemMgr *mm,
                             const BtorBitVector *a,
                             const BtorBitVector *b);
 
+BtorBitVector *btor_bv_sra (BtorMemMgr *mm,
+                            const BtorBitVector *a,
+                            const BtorBitVector *b);
+
 BtorBitVector *btor_bv_mul (BtorMemMgr *mm,
                             const BtorBitVector *a,
                             const BtorBitVector *b);
