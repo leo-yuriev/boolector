@@ -3421,13 +3421,16 @@ select_move (Btor *btor,
 uint64_t
 btor_proputils_select_move_prop (Btor *btor,
                                  BtorNode *root,
+                                 BtorBitVector *bvroot,
                                  BtorNode **input,
                                  BtorBitVector **assignment)
 {
   assert (btor);
   assert (root);
-  assert (btor_bv_to_uint64 ((BtorBitVector *) btor_model_get_bv (btor, root))
-          == 0);
+  assert (bvroot);
+  assert (
+      btor_bv_compare (bvroot, (BtorBitVector *) btor_model_get_bv (btor, root))
+      != 0);
 
   bool b;
   int32_t i, nconst;
@@ -3447,7 +3450,7 @@ btor_proputils_select_move_prop (Btor *btor,
   nprops      = 0;
 
   cur   = root;
-  bvcur = btor_bv_one (btor->mm, 1);
+  bvcur = btor_bv_copy (btor->mm, bvroot);
 
   for (;;)
   {

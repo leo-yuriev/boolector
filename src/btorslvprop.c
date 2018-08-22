@@ -129,7 +129,7 @@ move (Btor *btor, uint32_t nmoves)
   BTORLOG (1, "*** move");
 
   BtorNode *root, *input;
-  BtorBitVector *assignment;
+  BtorBitVector *bvroot, *assignment;
   BtorPropSolver *slv;
   BtorIntHashTable *exps;
 
@@ -137,12 +137,15 @@ move (Btor *btor, uint32_t nmoves)
   assert (slv);
 
   root = select_constraint (btor, nmoves);
+  bvroot = btor_bv_one (btor->mm, 1);
 
   do
   {
-    slv->stats.props +=
-        btor_proputils_select_move_prop (btor, root, &input, &assignment);
+    slv->stats.props += btor_proputils_select_move_prop (
+        btor, root, bvroot, &input, &assignment);
   } while (!input);
+
+  btor_bv_free (btor->mm, bvroot);
 
 #ifndef NBTORLOG
   char *a;
@@ -266,7 +269,7 @@ sat_prop_solver_aux (Btor *btor)
 
   for (;;)
   {
-    assert (BTOR_EMPTY_STACK (slv->toprop));
+    btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
 
     /* collect unsatisfied roots (kept up-to-date in update_cone) */
     assert (!slv->roots);
