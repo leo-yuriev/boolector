@@ -9,19 +9,39 @@
 #ifndef BTORPROPUTILS_H_INCLUDED
 #define BTORPROPUTILS_H_INCLUDED
 
-#include "btorslvprop.h"
-#include "btorslvsls.h"
-
 #include "btorbv.h"
 #include "btorlog.h"
 #include "btormodel.h"
 #include "btornode.h"
 #include "btortypes.h"
 #include "utils/btorhashint.h"
+#include "utils/btorstack.h"
 
 /*------------------------------------------------------------------------*/
 
 #define BTOR_PROPUTILS_PROB_FLIP_COND_CONST_DELTA 100
+
+/*------------------------------------------------------------------------*/
+
+/* maintain information about entailed propagations, e.g., when all children
+ * of a node need to be updated with respect to the target value. */
+struct BtorPropInfo
+{
+  BtorNode* exp;
+  BtorBitVector* bvexp; /* target value  */
+  int32_t eidx;         /* branch to take */
+};
+typedef struct BtorPropInfo BtorPropInfo;
+
+BTOR_DECLARE_STACK (BtorPropInfo, BtorPropInfo);
+
+void btor_proputils_clone_prop_info_stack (BtorMemMgr* mm,
+                                           BtorPropInfoStack* stack,
+                                           BtorPropInfoStack* res,
+                                           BtorNodeMap* exp_map);
+
+void btor_proputils_reset_prop_info_stack (BtorMemMgr* mm,
+                                           BtorPropInfoStack* stack);
 
 /*------------------------------------------------------------------------*/
 

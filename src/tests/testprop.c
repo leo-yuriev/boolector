@@ -13,6 +13,7 @@
 #include "btormodel.h"
 #include "btornode.h"
 #include "btorproputils.h"
+#include "btorslvprop.h"
 #include "testrunner.h"
 #include "utils/btorutil.h"
 

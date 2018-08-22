@@ -10,6 +10,7 @@
 #define BTORSLVPROP_H_INCLUDED
 
 #include "btorbv.h"
+#include "btorproputils.h"
 #include "btorslv.h"
 #include "btortypes.h"
 #include "utils/btorhashint.h"
@@ -18,8 +19,19 @@ struct BtorPropSolver
 {
   BTOR_SOLVER_STRUCT;
 
-  BtorIntHashTable *roots; /* map: maintains 'selected' */
+  /* Map, maintains the roots.
+   * Maps root to 'selected' (= how often it got selected) */
+  BtorIntHashTable *roots;
+
+  /* Map, maintains SLS score.
+   * Maps node to its SLS score, only used for heuristically selecting
+   * a root r based on maximizing
+   *   score(r) + BTOR_PROP_SELECT_CFACT * sqrt (log (selected(r)) / nmoves)
+   * if BTOR_OPT_PROP_USE_BANDIT is enabled. */
   BtorIntHashTable *score;
+
+  /* Work stack, maintains entailed propagations. */
+  BtorPropInfoStack toprop;
 
   /* current probability for selecting the cond when either the
    * 'then' or 'else' branch is const (path selection) */

@@ -206,6 +206,8 @@ clone_prop_solver (Btor *clone, BtorPropSolver *slv, BtorNodeMap *exp_map)
   res->score =
       btor_hashint_map_clone (clone->mm, slv->score, btor_clone_data_as_dbl, 0);
 
+  btor_proputils_clone_prop_info_stack (
+      clone->mm, &slv->toprop, &res->toprop, exp_map);
   return res;
 }
 
@@ -220,6 +222,9 @@ delete_prop_solver (BtorPropSolver *slv)
   if (slv->score) btor_hashint_map_delete (slv->score);
   if (slv->roots) btor_hashint_map_delete (slv->roots);
 
+  btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
+
+  BTOR_RELEASE_STACK (slv->toprop);
   BTOR_DELETE (slv->btor->mm, slv);
 }
 
@@ -261,6 +266,8 @@ sat_prop_solver_aux (Btor *btor)
 
   for (;;)
   {
+    assert (BTOR_EMPTY_STACK (slv->toprop));
+
     /* collect unsatisfied roots (kept up-to-date in update_cone) */
     assert (!slv->roots);
     slv->roots = btor_hashint_map_new (btor->mm);
@@ -332,6 +339,7 @@ sat_prop_solver_aux (Btor *btor)
       btor_hashint_map_delete (slv->score);
       slv->score = btor_hashint_map_new (btor->mm);
     }
+    btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
     slv->stats.restarts += 1;
   }
 
@@ -552,6 +560,8 @@ btor_new_prop_solver (Btor *btor)
   slv->api.print_time_stats =
       (BtorSolverPrintTimeStats) print_time_stats_prop_solver;
   slv->api.print_model = (BtorSolverPrintModel) print_model_prop_solver;
+
+  BTOR_INIT_STACK (btor->mm, slv->toprop);
 
   BTOR_MSG (btor->msg, 1, "enabled prop engine");
 

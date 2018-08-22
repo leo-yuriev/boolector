@@ -17,6 +17,7 @@
 #include "btorlog.h"
 #include "btormodel.h"
 #include "btormsg.h"
+#include "btorproputils.h"
 #include "btorrwcache.h"
 #include "btorsat.h"
 #include "btorslvaigprop.h"
@@ -623,6 +624,7 @@ btor_clone_node_ptr_stack (BtorMemMgr *mm,
                            BtorNodeMap *exp_map,
                            bool is_zero_terminated)
 {
+  assert (mm);
   assert (stack);
   assert (res);
   assert (exp_map);
@@ -1479,7 +1481,10 @@ clone_aux_btor (Btor *btor,
       CHKCLONE_MEM_INT_HASH_MAP (slv->score, cslv->score);
 
       allocated += sizeof (BtorPropSolver) + MEM_PTR_HASH_TABLE (cslv->roots)
-                   + MEM_PTR_HASH_TABLE (cslv->score);
+                   + MEM_PTR_HASH_TABLE (cslv->score)
+                   + BTOR_SIZE_STACK (cslv->toprop) * sizeof (BtorPropInfo);
+      for (i = 0; i < BTOR_COUNT_STACK (cslv->toprop); i++)
+        allocated += MEM_BITVEC (BTOR_PEEK_STACK (cslv->toprop, i).bvexp);
     }
     else if (clone->slv->kind == BTOR_AIGPROP_SOLVER_KIND)
     {

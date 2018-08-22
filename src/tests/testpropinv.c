@@ -12,6 +12,8 @@
 #include "btorexp.h"
 #include "btornode.h"
 #include "btorproputils.h"
+#include "btorslvprop.h"
+#include "btorslvsls.h"
 #include "testrunner.h"
 #include "utils/btorutil.h"
 

@@ -8,8 +8,10 @@
 
 #include "btorproputils.h"
 
-#include "btorslsutils.h"
 #include "btorprintmodel.h"
+#include "btorslsutils.h"
+#include "btorslvprop.h"
+#include "btorslvsls.h"
 #include "utils/btornodeiter.h"
 #include "utils/btorutil.h"
 
@@ -1550,9 +1552,20 @@ res_rec_conf (Btor *btor,
     }
 #endif
     if (is_recoverable)
+    {
       BTOR_PROP_SOLVER (btor)->stats.rec_conf += 1;
+      /* recoverable conflict, push entailed propagation */
+      assert (exp->arity == 2);
+      BtorPropInfo prop = {exp, btor_bv_copy (btor->mm, bvexp), eidx ? 0 : 1};
+      BTOR_PUSH_STACK (BTOR_PROP_SOLVER (btor)->toprop, prop);
+    }
     else
+    {
       BTOR_PROP_SOLVER (btor)->stats.non_rec_conf += 1;
+      /* non-recoverable conflict, entailed propagations are thus invalid */
+      btor_proputils_reset_prop_info_stack (btor->mm,
+                                            &BTOR_PROP_SOLVER (btor)->toprop);
+    }
     /* fix counter since we always increase the counter, even in the conflict
      * case */
     BTOR_PROP_SOLVER (btor)->stats.props_inv -= 1;
@@ -3550,4 +3563,62 @@ btor_proputils_select_move_prop (Btor *btor,
   btor_bv_free (btor->mm, bvcur);
 
   return nprops;
+}
+
+/* ========================================================================== */
+
+void
+btor_proputils_clone_prop_info_stack (BtorMemMgr *mm,
+                                      BtorPropInfoStack *stack,
+                                      BtorPropInfoStack *res,
+                                      BtorNodeMap *exp_map)
+{
+  assert (mm);
+  assert (stack);
+  assert (res);
+  assert (exp_map);
+
+  uint32_t i;
+  BtorNode *cloned_exp;
+  BtorBitVector *cloned_bv;
+  BtorPropInfo cloned_prop;
+
+  BTOR_INIT_STACK (mm, *res);
+  assert (BTOR_SIZE_STACK (*stack) || !BTOR_COUNT_STACK (*stack));
+  if (BTOR_SIZE_STACK (*stack))
+  {
+    BTOR_NEWN (mm, res->start, BTOR_SIZE_STACK (*stack));
+    res->top = res->start;
+    res->end = res->start + BTOR_SIZE_STACK (*stack);
+
+    for (i = 0; i < BTOR_COUNT_STACK (*stack); i++)
+    {
+      cloned_exp =
+          btor_nodemap_mapped (exp_map, BTOR_PEEK_STACK (*stack, i).exp);
+      assert (cloned_exp);
+      cloned_prop.exp = cloned_exp;
+      assert (BTOR_PEEK_STACK (*stack, i).bvexp);
+      cloned_bv         = btor_bv_copy (mm, BTOR_PEEK_STACK (*stack, i).bvexp);
+      cloned_prop.bvexp = cloned_bv;
+      cloned_prop.eidx  = BTOR_PEEK_STACK (*stack, i).eidx;
+      assert (cloned_prop.eidx == 0 || cloned_prop.eidx == 1);
+      BTOR_PUSH_STACK (*res, cloned_prop);
+    }
+  }
+  assert (BTOR_COUNT_STACK (*stack) == BTOR_COUNT_STACK (*res));
+  assert (BTOR_SIZE_STACK (*stack) == BTOR_SIZE_STACK (*res));
+}
+
+void
+btor_proputils_reset_prop_info_stack (BtorMemMgr *mm, BtorPropInfoStack *stack)
+{
+  assert (mm);
+  assert (stack);
+
+  while (!BTOR_EMPTY_STACK (*stack))
+  {
+    BtorPropInfo prop = BTOR_POP_STACK (*stack);
+    btor_bv_free (mm, prop.bvexp);
+  }
+  BTOR_RESET_STACK (*stack);
 }
