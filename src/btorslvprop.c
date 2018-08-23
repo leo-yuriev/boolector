@@ -151,12 +151,9 @@ move (Btor *btor, uint32_t nmoves)
     {
       prop   = BTOR_POP_STACK (slv->toprop);
       root   = prop.exp;
-      bvroot = btor_bv_copy (btor->mm, prop.bvexp);
+      bvroot = prop.bvexp;
       eidx   = prop.eidx;
     }
-
-    input = 0;
-    assignment = 0;
 
     props = btor_proputils_select_move_prop (
         btor, root, bvroot, eidx, &input, &assignment);
@@ -247,8 +244,7 @@ delete_prop_solver (BtorPropSolver *slv)
   if (slv->score) btor_hashint_map_delete (slv->score);
   if (slv->roots) btor_hashint_map_delete (slv->roots);
 
-  btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
-
+  assert (BTOR_EMPTY_STACK (slv->toprop));
   BTOR_RELEASE_STACK (slv->toprop);
   BTOR_DELETE (slv->btor->mm, slv);
 }
@@ -291,7 +287,7 @@ sat_prop_solver_aux (Btor *btor)
 
   for (;;)
   {
-    btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
+    assert (BTOR_EMPTY_STACK (slv->toprop));
 
     /* collect unsatisfied roots (kept up-to-date in update_cone) */
     assert (!slv->roots);
@@ -364,8 +360,8 @@ sat_prop_solver_aux (Btor *btor)
       btor_hashint_map_delete (slv->score);
       slv->score = btor_hashint_map_new (btor->mm);
     }
-    btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
     slv->stats.restarts += 1;
+    btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
   }
 
 SAT:
@@ -386,6 +382,7 @@ DONE:
     btor_hashint_map_delete (slv->score);
     slv->score = 0;
   }
+  btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
   return sat_result;
 }
 
@@ -421,6 +418,7 @@ sat_prop_solver (BtorPropSolver *slv)
   slv->api.generate_model ((BtorSolver *) slv, false, true);
   sat_result = sat_prop_solver_aux (btor);
 DONE:
+  assert (BTOR_EMPTY_STACK (slv->toprop));
   return sat_result;
 }
 

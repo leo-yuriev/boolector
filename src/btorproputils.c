@@ -1490,16 +1490,24 @@ res_rec_conf (Btor *btor,
   (void) op;
   (void) e;
 
-  bool is_recoverable = btor_node_is_bv_const (e) ? false : true;
-  BtorBitVector *res =
-      btor_opt_get (btor, BTOR_OPT_PROP_NO_MOVE_ON_CONFLICT) && !is_recoverable
-          ? 0
-          : fun (btor, exp, bvexp, bve, eidx);
-  assert (btor_opt_get (btor, BTOR_OPT_PROP_NO_MOVE_ON_CONFLICT) || res);
+  bool is_recoverable;
+  uint32_t no_move_on_conflict;
+  BtorBitVector *res;
+  BtorMemMgr *mm;
+
+  mm = btor->mm;
+
+  is_recoverable      = btor_node_is_bv_const (e) ? false : true;
+  no_move_on_conflict = btor_opt_get (btor, BTOR_OPT_PROP_NO_MOVE_ON_CONFLICT);
+
+  res = no_move_on_conflict && !is_recoverable
+            ? 0
+            : fun (btor, exp, bvexp, bve, eidx);
+  assert (no_move_on_conflict || res);
 
 #ifndef NDEBUG
-  char *sbve   = btor_bv_to_char (btor->mm, bve);
-  char *sbvexp = btor_bv_to_char (btor->mm, bvexp);
+  char *sbve   = btor_bv_to_char (mm, bve);
+  char *sbvexp = btor_bv_to_char (mm, bvexp);
   BTORLOG (2, "");
   if (eidx)
     BTORLOG (2,
@@ -1517,8 +1525,8 @@ res_rec_conf (Btor *btor,
              sbvexp,
              op,
              sbve);
-  btor_mem_freestr (btor->mm, sbve);
-  btor_mem_freestr (btor->mm, sbvexp);
+  btor_mem_freestr (mm, sbve);
+  btor_mem_freestr (mm, sbvexp);
 #endif
   if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
   {
@@ -1556,15 +1564,15 @@ res_rec_conf (Btor *btor,
       BTOR_PROP_SOLVER (btor)->stats.rec_conf += 1;
       /* recoverable conflict, push entailed propagation */
       assert (exp->arity == 2);
-      BtorPropInfo prop = {exp, btor_bv_copy (btor->mm, bvexp), eidx ? 0 : 1};
+      BtorPropInfo prop = {exp, btor_bv_copy (mm, bvexp), eidx ? 0 : 1};
       BTOR_PUSH_STACK (BTOR_PROP_SOLVER (btor)->toprop, prop);
     }
     else
     {
       BTOR_PROP_SOLVER (btor)->stats.non_rec_conf += 1;
       /* non-recoverable conflict, entailed propagations are thus invalid */
-      btor_proputils_reset_prop_info_stack (btor->mm,
-                                            &BTOR_PROP_SOLVER (btor)->toprop);
+      btor_proputils_reset_prop_info_stack (
+          mm, &BTOR_PROP_SOLVER (btor)->toprop);
     }
     /* fix counter since we always increase the counter, even in the conflict
      * case */
@@ -3441,12 +3449,12 @@ btor_proputils_select_move_prop (Btor *btor,
   char *a;
 #endif
 
-  tmp = (BtorBitVector *) btor_model_get_bv (btor, root);
-  if (!btor_bv_compare (bvroot, tmp)) return 0;
-
   *input      = 0;
   *assignment = 0;
   nprops      = 0;
+
+  tmp = (BtorBitVector *) btor_model_get_bv (btor, root);
+  if (!btor_bv_compare (bvroot, tmp)) goto DONE;
 
   cur   = root;
   bvcur = btor_bv_copy (btor->mm, bvroot);
@@ -3568,6 +3576,7 @@ btor_proputils_select_move_prop (Btor *btor,
 
   btor_bv_free (btor->mm, bvcur);
 
+DONE:
   return nprops;
 }
 
@@ -3585,9 +3594,9 @@ btor_proputils_clone_prop_info_stack (BtorMemMgr *mm,
   assert (exp_map);
 
   uint32_t i;
+  int32_t cloned_eidx;
   BtorNode *cloned_exp;
-  BtorBitVector *cloned_bv;
-  BtorPropInfo cloned_prop;
+  BtorBitVector *cloned_bvexp;
 
   BTOR_INIT_STACK (mm, *res);
   assert (BTOR_SIZE_STACK (*stack) || !BTOR_COUNT_STACK (*stack));
@@ -3599,15 +3608,15 @@ btor_proputils_clone_prop_info_stack (BtorMemMgr *mm,
 
     for (i = 0; i < BTOR_COUNT_STACK (*stack); i++)
     {
+      assert (BTOR_PEEK_STACK (*stack, i).exp);
       cloned_exp =
           btor_nodemap_mapped (exp_map, BTOR_PEEK_STACK (*stack, i).exp);
       assert (cloned_exp);
-      cloned_prop.exp = cloned_exp;
       assert (BTOR_PEEK_STACK (*stack, i).bvexp);
-      cloned_bv         = btor_bv_copy (mm, BTOR_PEEK_STACK (*stack, i).bvexp);
-      cloned_prop.bvexp = cloned_bv;
-      cloned_prop.eidx  = BTOR_PEEK_STACK (*stack, i).eidx;
-      assert (cloned_prop.eidx == 0 || cloned_prop.eidx == 1);
+      cloned_bvexp = btor_bv_copy (mm, BTOR_PEEK_STACK (*stack, i).bvexp);
+      cloned_eidx = BTOR_PEEK_STACK (*stack, i).eidx;
+      assert (cloned_eidx == 0 || cloned_eidx == 1);
+      BtorPropInfo cloned_prop = {cloned_exp, cloned_bvexp, cloned_eidx};
       BTOR_PUSH_STACK (*res, cloned_prop);
     }
   }
