@@ -869,6 +869,16 @@ btor_opt_init_opts (Btor *btor)
             UINT32_MAX,
             "number of propagation steps used as a limit for prop engine");
   init_opt (btor,
+            BTOR_OPT_PROP_ENTAILED,
+            false,
+            true,
+            "prop:entailed",
+            0,
+            0,
+            0,
+            1,
+            "maintain and prioritize entailed propagations");
+  init_opt (btor,
             BTOR_OPT_PROP_USE_RESTARTS,
             false,
             true,

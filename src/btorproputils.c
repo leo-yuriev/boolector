@@ -1564,8 +1564,11 @@ res_rec_conf (Btor *btor,
       BTOR_PROP_SOLVER (btor)->stats.rec_conf += 1;
       /* recoverable conflict, push entailed propagation */
       assert (exp->arity == 2);
-      BtorPropInfo prop = {exp, btor_bv_copy (mm, bvexp), eidx ? 0 : 1};
-      BTOR_PUSH_STACK (BTOR_PROP_SOLVER (btor)->toprop, prop);
+      if (btor_opt_get (btor, BTOR_OPT_PROP_ENTAILED))
+      {
+        BtorPropInfo prop = {exp, btor_bv_copy (mm, bvexp), eidx ? 0 : 1};
+        BTOR_PUSH_STACK (BTOR_PROP_SOLVER (btor)->toprop, prop);
+      }
     }
     else
     {

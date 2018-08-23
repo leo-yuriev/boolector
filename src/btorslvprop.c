@@ -450,17 +450,21 @@ print_stats_prop_solver (BtorPropSolver *slv)
   assert (slv->btor->slv == (BtorSolver *) slv);
 
   Btor *btor = slv->btor;
+  bool enable_entailed = btor_opt_get (slv->btor, BTOR_OPT_PROP_ENTAILED);
 
   BTOR_MSG (btor->msg, 1, "");
   BTOR_MSG (btor->msg, 1, "restarts: %u", slv->stats.restarts);
   BTOR_MSG (btor->msg, 1, "moves: %u", slv->stats.moves);
-  BTOR_MSG (btor->msg, 1, "   entailed moves: %u", slv->stats.entailed_moves);
+
+  if (enable_entailed)
+    BTOR_MSG (btor->msg, 1, "   entailed moves: %u", slv->stats.entailed_moves);
   BTOR_MSG (btor->msg,
             1,
             "moves per second: %.2f",
             (double) slv->stats.moves / (btor->time.sat - btor->time.simplify));
   BTOR_MSG (btor->msg, 1, "propagation (steps): %u", slv->stats.props);
-  BTOR_MSG (btor->msg, 1, "   entailed propagations: %u", slv->stats.entailed_props);
+  if (enable_entailed)
+    BTOR_MSG (btor->msg, 1, "   entailed propagations: %u", slv->stats.entailed_props);
   BTOR_MSG (btor->msg,
             1,
             "   consistent value propagations: %u",

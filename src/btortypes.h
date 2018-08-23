@@ -604,6 +604,15 @@ enum BtorOption
   BTOR_OPT_PROP_NPROPS,
 
   /*!
+    * **BTOR_OPT_PROP_ENTAILED**
+
+      Enable (``value``: 1) or disable (``value``: 0) maintaining a work queue
+      with entailed propagations. If enabled, propagations from this queue are
+      propagated before randomly choosing a yet unsatisfied path from the root.
+   */
+  BTOR_OPT_PROP_ENTAILED,
+
+  /*!
     * **BTOR_OPT_PROP_USE_RESTARTS**
 
       Enable (``value``: 1) or disable (``value``: 0) restarts.
