@@ -14,6 +14,7 @@ set(libboolector_src_files
   btordbg.c
   btordcr.c
   btorexp.c
+  btorinvutils.c
   btorlsutils.c
   btormc.c
   btormodel.c
