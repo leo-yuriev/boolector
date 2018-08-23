@@ -132,18 +132,39 @@ move (Btor *btor, uint32_t nmoves)
   BtorBitVector *bvroot, *assignment;
   BtorPropSolver *slv;
   BtorIntHashTable *exps;
+  BtorPropInfo prop;
+  int32_t eidx;
+  uint64_t props;
 
   slv = BTOR_PROP_SOLVER (btor);
   assert (slv);
 
-  root = select_constraint (btor, nmoves);
-  bvroot = btor_bv_one (btor->mm, 1);
-
   do
   {
-    slv->stats.props += btor_proputils_select_move_prop (
-        btor, root, bvroot, &input, &assignment);
+    if (BTOR_EMPTY_STACK (slv->toprop))
+    {
+      root   = select_constraint (btor, nmoves);
+      bvroot = btor_bv_one (btor->mm, 1);
+      eidx   = -1;
+    }
+    else
+    {
+      prop   = BTOR_POP_STACK (slv->toprop);
+      root   = prop.exp;
+      bvroot = btor_bv_copy (btor->mm, prop.bvexp);
+      eidx   = prop.eidx;
+    }
+
+    input = 0;
+    assignment = 0;
+
+    props = btor_proputils_select_move_prop (
+        btor, root, bvroot, eidx, &input, &assignment);
   } while (!input);
+
+  assert (assignment);
+  slv->stats.props += props;
+  if (eidx != -1) slv->stats.entailed_props += props;
 
   btor_bv_free (btor->mm, bvroot);
 
@@ -183,6 +204,7 @@ move (Btor *btor, uint32_t nmoves)
   btor_hashint_map_delete (exps);
 
   slv->stats.moves += 1;
+  if (eidx != -1) slv->stats.entailed_moves += 1;
   btor_bv_free (btor->mm, assignment);
 
   return true;
@@ -434,11 +456,13 @@ print_stats_prop_solver (BtorPropSolver *slv)
   BTOR_MSG (btor->msg, 1, "");
   BTOR_MSG (btor->msg, 1, "restarts: %u", slv->stats.restarts);
   BTOR_MSG (btor->msg, 1, "moves: %u", slv->stats.moves);
+  BTOR_MSG (btor->msg, 1, "   entailed moves: %u", slv->stats.entailed_moves);
   BTOR_MSG (btor->msg,
             1,
             "moves per second: %.2f",
             (double) slv->stats.moves / (btor->time.sat - btor->time.simplify));
   BTOR_MSG (btor->msg, 1, "propagation (steps): %u", slv->stats.props);
+  BTOR_MSG (btor->msg, 1, "   entailed propagations: %u", slv->stats.entailed_props);
   BTOR_MSG (btor->msg,
             1,
             "   consistent value propagations: %u",

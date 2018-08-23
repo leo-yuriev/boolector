@@ -1165,7 +1165,7 @@ move (Btor *btor, uint32_t nmoves)
     slv->max_move = BTOR_SLS_MOVE_PROP;
     one           = btor_bv_one (btor->mm, 1);
     slv->stats.props +=
-        btor_proputils_select_move_prop (btor, constr, one, &can, &neigh);
+        btor_proputils_select_move_prop (btor, constr, one, -1, &can, &neigh);
     btor_bv_free (btor->mm, one);
     if (can)
     {

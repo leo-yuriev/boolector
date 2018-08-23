@@ -48,6 +48,7 @@ void btor_proputils_reset_prop_info_stack (BtorMemMgr* mm,
 uint64_t btor_proputils_select_move_prop (Btor* btor,
                                           BtorNode* root,
                                           BtorBitVector* bvroot,
+                                          int32_t eidx,
                                           BtorNode** input,
                                           BtorBitVector** assignment);
 

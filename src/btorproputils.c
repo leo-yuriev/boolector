@@ -3391,8 +3391,7 @@ select_move (Btor *btor,
              BtorNode *exp,
              BtorBitVector *bvexp,
              BtorBitVector *bve[3],
-             int32_t (*select_path) (
-                 Btor *, BtorNode *, BtorBitVector *, BtorBitVector **),
+             int32_t eidx,
              BtorBitVector *(*compute_value) (
                  Btor *, BtorNode *, BtorBitVector *, BtorBitVector *, int32_t),
              BtorBitVector **value)
@@ -3402,14 +3401,12 @@ select_move (Btor *btor,
   assert (btor_node_is_regular (exp));
   assert (bvexp);
   assert (bve);
-  assert (select_path);
+  assert (eidx >= 0);
   assert (compute_value);
   assert (value);
 
-  int32_t eidx, idx;
+  int32_t idx;
 
-  eidx = select_path (btor, exp, bvexp, bve);
-  assert (eidx >= 0);
   /* special case slice: only one child
    * special case cond: we only need assignment of condition to compute value */
   idx = eidx ? 0
@@ -3422,15 +3419,14 @@ uint64_t
 btor_proputils_select_move_prop (Btor *btor,
                                  BtorNode *root,
                                  BtorBitVector *bvroot,
+                                 int32_t eidx,
                                  BtorNode **input,
                                  BtorBitVector **assignment)
 {
   assert (btor);
   assert (root);
   assert (bvroot);
-  assert (
-      btor_bv_compare (bvroot, (BtorBitVector *) btor_model_get_bv (btor, root))
-      != 0);
+
 
   bool b;
   int32_t i, nconst;
@@ -3444,6 +3440,9 @@ btor_proputils_select_move_prop (Btor *btor,
 #ifndef NBTORLOG
   char *a;
 #endif
+
+  tmp = (BtorBitVector *) btor_model_get_bv (btor, root);
+  if (!btor_bv_compare (bvroot, tmp)) return 0;
 
   *input      = 0;
   *assignment = 0;
@@ -3554,12 +3553,16 @@ btor_proputils_select_move_prop (Btor *btor,
           compute_value = b ? inv_cond_bv : cons_cond_bv;
       }
 
+      if (eidx == -1) eidx = select_path (btor, real_cur, bvcur, bve);
+
       cur = select_move (
-          btor, real_cur, bvcur, bve, select_path, compute_value, &bvenew);
+          btor, real_cur, bvcur, bve, eidx, compute_value, &bvenew);
+
       if (!bvenew) break; /* non-recoverable conflict */
 
       btor_bv_free (btor->mm, bvcur);
       bvcur = bvenew;
+      eidx  = -1;
     }
   }
 
