@@ -139,8 +139,11 @@ move (Btor *btor, uint32_t nmoves)
   slv = BTOR_PROP_SOLVER (btor);
   assert (slv);
 
+  bvroot = 0;
   do
   {
+    if (bvroot) btor_bv_free (btor->mm, bvroot);
+
     if (BTOR_EMPTY_STACK (slv->toprop))
     {
       root   = select_constraint (btor, nmoves);
