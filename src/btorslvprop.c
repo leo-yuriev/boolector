@@ -164,7 +164,7 @@ move (Btor *btor, uint32_t nmoves)
 
   assert (assignment);
   slv->stats.props += props;
-  if (eidx != -1) slv->stats.entailed_props += props;
+  if (eidx != -1) slv->stats.props_entailed += props;
 
   btor_bv_free (btor->mm, bvroot);
 
@@ -204,7 +204,7 @@ move (Btor *btor, uint32_t nmoves)
   btor_hashint_map_delete (exps);
 
   slv->stats.moves += 1;
-  if (eidx != -1) slv->stats.entailed_moves += 1;
+  if (eidx != -1) slv->stats.fixed_conf += 1;
   btor_bv_free (btor->mm, assignment);
 
   return true;
@@ -459,15 +459,16 @@ print_stats_prop_solver (BtorPropSolver *slv)
   BTOR_MSG (btor->msg, 1, "restarts: %u", slv->stats.restarts);
   BTOR_MSG (btor->msg, 1, "moves: %u", slv->stats.moves);
 
-  if (enable_entailed)
-    BTOR_MSG (btor->msg, 1, "   entailed moves: %u", slv->stats.entailed_moves);
   BTOR_MSG (btor->msg,
             1,
             "moves per second: %.2f",
             (double) slv->stats.moves / (btor->time.sat - btor->time.simplify));
   BTOR_MSG (btor->msg, 1, "propagation (steps): %u", slv->stats.props);
   if (enable_entailed)
-    BTOR_MSG (btor->msg, 1, "   entailed propagations: %u", slv->stats.entailed_props);
+    BTOR_MSG (btor->msg,
+              1,
+              "   entailed propagations: %u",
+              slv->stats.props_entailed);
   BTOR_MSG (btor->msg,
             1,
             "   consistent value propagations: %u",
@@ -478,16 +479,20 @@ print_stats_prop_solver (BtorPropSolver *slv)
             1,
             "propagation (steps) per second: %.2f",
             (double) slv->stats.props / (btor->time.sat - btor->time.simplify));
-  BTOR_MSG (btor->msg, 1, "updates (cone): %u", slv->stats.updates);
-  BTOR_MSG (btor->msg, 1, "");
   BTOR_MSG (btor->msg,
             1,
-            "propagation move conflicts (recoverable): %u",
-            slv->stats.rec_conf);
-  BTOR_MSG (btor->msg,
-            1,
-            "propagation move conflicts (non-recoverable): %u",
+            "propagation conflicts (non-recoverable): %u",
             slv->stats.non_rec_conf);
+  BTOR_MSG (btor->msg,
+            1,
+            "propagation conflicts (recoverable): %u",
+            slv->stats.rec_conf);
+  if (enable_entailed)
+    BTOR_MSG (btor->msg,
+              1,
+              "   fixed recoverable conflicts (= entailed moves): %u",
+              slv->stats.fixed_conf);
+  BTOR_MSG (btor->msg, 1, "updates (cone): %u", slv->stats.updates);
 #ifndef NDEBUG
   BTOR_MSG (btor->msg, 1, "");
   BTOR_MSG (
