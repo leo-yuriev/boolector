@@ -204,7 +204,11 @@ move (Btor *btor, uint32_t nmoves)
   btor_hashint_map_delete (exps);
 
   slv->stats.moves += 1;
-  if (eidx != -1) slv->stats.fixed_conf += 1;
+  if (eidx != -1)
+  {
+    slv->stats.moves_entailed += 1;
+    slv->stats.fixed_conf += 1;
+  }
   btor_bv_free (btor->mm, assignment);
 
   return true;
@@ -458,6 +462,9 @@ print_stats_prop_solver (BtorPropSolver *slv)
   BTOR_MSG (btor->msg, 1, "");
   BTOR_MSG (btor->msg, 1, "restarts: %u", slv->stats.restarts);
   BTOR_MSG (btor->msg, 1, "moves: %u", slv->stats.moves);
+  if (enable_entailed)
+    BTOR_MSG (
+        btor->msg, 1, "    entailed moves: %u", slv->stats.moves_entailed);
 
   BTOR_MSG (btor->msg,
             1,
@@ -467,14 +474,14 @@ print_stats_prop_solver (BtorPropSolver *slv)
   if (enable_entailed)
     BTOR_MSG (btor->msg,
               1,
-              "   entailed propagations: %u",
+              "    entailed propagations: %u",
               slv->stats.props_entailed);
   BTOR_MSG (btor->msg,
             1,
-            "   consistent value propagations: %u",
+            "    consistent value propagations: %u",
             slv->stats.props_cons);
   BTOR_MSG (
-      btor->msg, 1, "   inverse value propagations: %u", slv->stats.props_inv);
+      btor->msg, 1, "    inverse value propagations: %u", slv->stats.props_inv);
   BTOR_MSG (btor->msg,
             1,
             "propagation (steps) per second: %.2f",
@@ -488,54 +495,82 @@ print_stats_prop_solver (BtorPropSolver *slv)
             "propagation conflicts (recoverable): %u",
             slv->stats.rec_conf);
   if (enable_entailed)
+  {
     BTOR_MSG (btor->msg,
               1,
-              "   fixed recoverable conflicts (= entailed moves): %u",
+              "   fixed recoverable conflicts: %u",
               slv->stats.fixed_conf);
+    BTOR_MSG (btor->msg,
+              1,
+              "   recoverable conflicts fixed without an entailed move: %u",
+              slv->stats.fixed_conf - slv->stats.moves_entailed);
+  }
   BTOR_MSG (btor->msg, 1, "updates (cone): %u", slv->stats.updates);
 #ifndef NDEBUG
   BTOR_MSG (btor->msg, 1, "");
+  BTOR_MSG (btor->msg, 1, "consistent value computations:");
   BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (add): %u", slv->stats.cons_add);
+      btor->msg, 1, "    consistent fun calls (add): %u", slv->stats.cons_add);
   BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (and): %u", slv->stats.cons_and);
-  BTOR_MSG (btor->msg, 1, "consistent fun calls (eq): %u", slv->stats.cons_eq);
+      btor->msg, 1, "    consistent fun calls (and): %u", slv->stats.cons_and);
   BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (ult): %u", slv->stats.cons_ult);
+      btor->msg, 1, "    consistent fun calls (eq): %u", slv->stats.cons_eq);
   BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (sll): %u", slv->stats.cons_sll);
+      btor->msg, 1, "    consistent fun calls (ult): %u", slv->stats.cons_ult);
   BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (srl): %u", slv->stats.cons_srl);
+      btor->msg, 1, "    consistent fun calls (sll): %u", slv->stats.cons_sll);
   BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (mul): %u", slv->stats.cons_mul);
+      btor->msg, 1, "    consistent fun calls (srl): %u", slv->stats.cons_srl);
   BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (udiv): %u", slv->stats.cons_udiv);
-  BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (urem): %u", slv->stats.cons_urem);
+      btor->msg, 1, "    consistent fun calls (mul): %u", slv->stats.cons_mul);
   BTOR_MSG (btor->msg,
             1,
-            "consistent fun calls (concat): %u",
+            "    consistent fun calls (udiv): %u",
+            slv->stats.cons_udiv);
+  BTOR_MSG (btor->msg,
+            1,
+            "    consistent fun calls (urem): %u",
+            slv->stats.cons_urem);
+  BTOR_MSG (btor->msg,
+            1,
+            "    consistent fun calls (concat): %u",
             slv->stats.cons_concat);
-  BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (slice): %u", slv->stats.cons_slice);
-  BTOR_MSG (
-      btor->msg, 1, "consistent fun calls (cond): %u", slv->stats.cons_cond);
+  BTOR_MSG (btor->msg,
+            1,
+            "    consistent fun calls (slice): %u",
+            slv->stats.cons_slice);
+  BTOR_MSG (btor->msg,
+            1,
+            "    consistent fun calls (cond): %u",
+            slv->stats.cons_cond);
 
   BTOR_MSG (btor->msg, 1, "");
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (add): %u", slv->stats.inv_add);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (and): %u", slv->stats.inv_and);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (eq): %u", slv->stats.inv_eq);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (ult): %u", slv->stats.inv_ult);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (sll): %u", slv->stats.inv_sll);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (srl): %u", slv->stats.inv_srl);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (mul): %u", slv->stats.inv_mul);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (udiv): %u", slv->stats.inv_udiv);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (urem): %u", slv->stats.inv_urem);
+  BTOR_MSG (btor->msg, 1, "inverse value computations:");
   BTOR_MSG (
-      btor->msg, 1, "inverse fun calls (concat): %u", slv->stats.inv_concat);
+      btor->msg, 1, "    inverse fun calls (add): %u", slv->stats.inv_add);
   BTOR_MSG (
-      btor->msg, 1, "inverse fun calls (slice): %u", slv->stats.inv_slice);
-  BTOR_MSG (btor->msg, 1, "inverse fun calls (cond): %u", slv->stats.inv_cond);
+      btor->msg, 1, "    inverse fun calls (and): %u", slv->stats.inv_and);
+  BTOR_MSG (btor->msg, 1, "    inverse fun calls (eq): %u", slv->stats.inv_eq);
+  BTOR_MSG (
+      btor->msg, 1, "    inverse fun calls (ult): %u", slv->stats.inv_ult);
+  BTOR_MSG (
+      btor->msg, 1, "    inverse fun calls (sll): %u", slv->stats.inv_sll);
+  BTOR_MSG (
+      btor->msg, 1, "    inverse fun calls (srl): %u", slv->stats.inv_srl);
+  BTOR_MSG (
+      btor->msg, 1, "    inverse fun calls (mul): %u", slv->stats.inv_mul);
+  BTOR_MSG (
+      btor->msg, 1, "    inverse fun calls (udiv): %u", slv->stats.inv_udiv);
+  BTOR_MSG (
+      btor->msg, 1, "    inverse fun calls (urem): %u", slv->stats.inv_urem);
+  BTOR_MSG (btor->msg,
+            1,
+            "    inverse fun calls (concat): %u",
+            slv->stats.inv_concat);
+  BTOR_MSG (
+      btor->msg, 1, "    inverse fun calls (slice): %u", slv->stats.inv_slice);
+  BTOR_MSG (
+      btor->msg, 1, "    inverse fun calls (cond): %u", slv->stats.inv_cond);
 #endif
 }
 

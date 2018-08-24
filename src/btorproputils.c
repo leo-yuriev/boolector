@@ -3457,7 +3457,12 @@ btor_proputils_select_move_prop (Btor *btor,
   nprops      = 0;
 
   tmp = (BtorBitVector *) btor_model_get_bv (btor, root);
-  if (!btor_bv_compare (bvroot, tmp)) goto DONE;
+  if (!btor_bv_compare (bvroot, tmp))
+  {
+    if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+      BTOR_PROP_SOLVER (btor)->stats.fixed_conf++;
+    goto DONE;
+  }
 
   cur   = root;
   bvcur = btor_bv_copy (btor->mm, bvroot);
