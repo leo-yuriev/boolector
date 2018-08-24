@@ -121,7 +121,7 @@ select_constraint (Btor *btor, uint32_t nmoves)
 }
 
 static bool
-move (Btor *btor, uint32_t nmoves)
+move (Btor *btor)
 {
   assert (btor);
 
@@ -146,7 +146,7 @@ move (Btor *btor, uint32_t nmoves)
 
     if (BTOR_EMPTY_STACK (slv->toprop))
     {
-      root   = select_constraint (btor, nmoves);
+      root   = select_constraint (btor, slv->stats.moves);
       bvroot = btor_bv_one (btor->mm, 1);
       eidx   = -1;
     }
@@ -269,7 +269,7 @@ sat_prop_solver_aux (Btor *btor)
 
   uint32_t j, max_steps;
   int32_t sat_result;
-  uint32_t nmoves, nprops;
+  uint32_t nprops;
   BtorNode *root;
   BtorPtrHashTableIterator it;
   BtorPropSolver *slv;
@@ -277,8 +277,6 @@ sat_prop_solver_aux (Btor *btor)
   slv = BTOR_PROP_SOLVER (btor);
   assert (slv);
   nprops = btor_opt_get (btor, BTOR_OPT_PROP_NPROPS);
-
-  nmoves = 0;
 
   /* check for constraints occurring in both phases */
   btor_iter_hashptr_init (&it, btor->assumptions);
@@ -351,8 +349,7 @@ sat_prop_solver_aux (Btor *btor)
         goto DONE;
       }
 
-      if (!(move (btor, nmoves))) goto UNSAT;
-      nmoves += 1;
+      if (!(move (btor))) goto UNSAT;
 
       /* all constraints sat? */
       if (!slv->roots->count) goto SAT;
