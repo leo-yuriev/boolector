@@ -134,14 +134,22 @@ move (Btor *btor)
   BtorIntHashTable *exps;
   BtorPropInfo prop;
   int32_t eidx;
-  uint64_t props;
+  uint64_t props, nprops;
 
   slv = BTOR_PROP_SOLVER (btor);
   assert (slv);
+  assert (BTOR_EMPTY_STACK (slv->prop_path));
+  nprops = btor_opt_get (btor, BTOR_OPT_PROP_NPROPS);
 
   bvroot = 0;
   do
   {
+    if (nprops && slv->stats.props >= nprops) goto DONE;
+
+#ifndef NDEBUG
+    btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->prop_path);
+#endif
+
     if (bvroot) btor_bv_free (btor->mm, bvroot);
 
     if (BTOR_EMPTY_STACK (slv->toprop))
@@ -160,11 +168,11 @@ move (Btor *btor)
 
     props = btor_proputils_select_move_prop (
         btor, root, bvroot, eidx, &input, &assignment);
+    slv->stats.props += props;
+    if (eidx != -1) slv->stats.props_entailed += props;
   } while (!input);
 
   assert (assignment);
-  slv->stats.props += props;
-  if (eidx != -1) slv->stats.props_entailed += props;
 
   btor_bv_free (btor->mm, bvroot);
 
@@ -203,6 +211,22 @@ move (Btor *btor)
       &slv->time.update_cone_compute_score);
   btor_hashint_map_delete (exps);
 
+#ifndef NDEBUG
+  size_t i, cnt;
+  BtorBitVector *bvass, *bvtarget;
+  BtorNode *n;
+  cnt = BTOR_COUNT_STACK (slv->prop_path);
+  for (i = 0; i < cnt; i++)
+  {
+    n = BTOR_PEEK_STACK (slv->prop_path, cnt - 1 - i).exp;
+    assert (btor_node_is_regular (n));
+    bvass    = (BtorBitVector *) btor_model_get_bv (btor, n);
+    bvtarget = BTOR_PEEK_STACK (slv->prop_path, cnt - 1 - i).bvexp;
+    if (btor_bv_compare (bvass, bvtarget)) break;
+  }
+  BTORLOG (1, "  matching target values: %u", i);
+#endif
+
   slv->stats.moves += 1;
   if (eidx != -1)
   {
@@ -211,6 +235,10 @@ move (Btor *btor)
   }
   btor_bv_free (btor->mm, assignment);
 
+DONE:
+#ifndef NDEBUG
+  btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->prop_path);
+#endif
   return true;
 }
 
@@ -237,6 +265,10 @@ clone_prop_solver (Btor *clone, BtorPropSolver *slv, BtorNodeMap *exp_map)
 
   btor_proputils_clone_prop_info_stack (
       clone->mm, &slv->toprop, &res->toprop, exp_map);
+#ifndef NDEBUG
+  btor_proputils_clone_prop_info_stack (
+      clone->mm, &slv->prop_path, &res->prop_path, exp_map);
+#endif
   return res;
 }
 
@@ -253,6 +285,10 @@ delete_prop_solver (BtorPropSolver *slv)
 
   assert (BTOR_EMPTY_STACK (slv->toprop));
   BTOR_RELEASE_STACK (slv->toprop);
+#ifndef NDEBUG
+  assert (BTOR_EMPTY_STACK (slv->prop_path));
+  BTOR_RELEASE_STACK (slv->prop_path);
+#endif
   BTOR_DELETE (slv->btor->mm, slv);
 }
 
@@ -387,6 +423,7 @@ DONE:
     slv->score = 0;
   }
   btor_proputils_reset_prop_info_stack (slv->btor->mm, &slv->toprop);
+  assert (BTOR_EMPTY_STACK (slv->prop_path));
   return sat_result;
 }
 
@@ -631,6 +668,9 @@ btor_new_prop_solver (Btor *btor)
   slv->api.print_model = (BtorSolverPrintModel) print_model_prop_solver;
 
   BTOR_INIT_STACK (btor->mm, slv->toprop);
+#ifndef NDEBUG
+  BTOR_INIT_STACK (btor->mm, slv->prop_path);
+#endif
 
   BTOR_MSG (btor->msg, 1, "enabled prop engine");
 

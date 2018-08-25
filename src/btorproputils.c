@@ -679,8 +679,8 @@ select_path_cond (Btor *btor,
                   BtorBitVector **bve)
 {
   assert (btor);
-  assert (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP
-          || btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_SLS);
+  assert (btor->slv->kind == BTOR_PROP_SOLVER_KIND
+          || btor->slv->kind == BTOR_SLS_SOLVER_KIND);
   assert (cond);
   assert (btor_node_is_regular (cond));
   assert (bvcond);
@@ -721,7 +721,7 @@ select_path_cond (Btor *btor,
     {
       eidx = 0;
 
-      if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+      if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
       {
         BtorPropSolver *slv;
         slv = BTOR_PROP_SOLVER (btor);
@@ -825,7 +825,7 @@ cons_add_bv (Btor *btor,
   (void) bve;
   (void) eidx;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_add++;
@@ -858,7 +858,7 @@ cons_and_bv (Btor *btor,
 
   (void) bve;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_and++;
@@ -916,7 +916,7 @@ cons_eq_bv (Btor *btor,
 
   BtorBitVector *res;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_eq++;
@@ -960,7 +960,7 @@ cons_ult_bv (Btor *btor,
 
   (void) ult;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_ult++;
@@ -1023,7 +1023,7 @@ cons_sll_bv (Btor *btor,
   (void) sll;
   (void) bve;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_sll++;
@@ -1083,7 +1083,7 @@ cons_srl_bv (Btor *btor,
   (void) srl;
   (void) bve;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_srl++;
@@ -1144,7 +1144,7 @@ cons_mul_bv (Btor *btor,
   (void) bve;
   (void) eidx;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_mul++;
@@ -1240,7 +1240,7 @@ cons_udiv_bv (Btor *btor,
   (void) udiv;
   (void) bve;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_udiv++;
@@ -1326,7 +1326,7 @@ cons_urem_bv (Btor *btor,
   (void) urem;
   (void) bve;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_urem++;
@@ -1390,7 +1390,7 @@ cons_concat_bv (Btor *btor,
   BtorBitVector *res;
   const BtorBitVector *bvcur;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.cons_concat++;
@@ -1433,13 +1433,6 @@ cons_slice_bv (Btor *btor,
                BtorBitVector *bve,
                int32_t eidx)
 {
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
-  {
-#ifndef NDEBUG
-    BTOR_PROP_SOLVER (btor)->stats.cons_slice++;
-#endif
-    BTOR_PROP_SOLVER (btor)->stats.props_cons += 1;
-  }
   return inv_slice_bv (btor, slice, bvslice, bve, eidx);
 }
 
@@ -1450,15 +1443,9 @@ cons_cond_bv (Btor *btor,
               BtorBitVector *bve,
               int32_t eidx)
 {
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
-  {
-#ifndef NDEBUG
-    BTOR_PROP_SOLVER (btor)->stats.cons_cond++;
-#endif
-    BTOR_PROP_SOLVER (btor)->stats.props_cons += 1;
-  }
   return inv_cond_bv (btor, cond, bvcond, bve, eidx);
 }
+
 
 /* ========================================================================== */
 /* Inverse value computation                                                  */
@@ -1479,8 +1466,8 @@ res_rec_conf (Btor *btor,
               char *op)
 {
   assert (btor);
-  assert (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP
-          || btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_SLS);
+  assert (btor->slv->kind == BTOR_PROP_SOLVER_KIND
+          || btor->slv->kind == BTOR_SLS_SOLVER_KIND);
   assert (exp);
   assert (btor_node_is_regular (exp));
   assert (e);
@@ -1528,34 +1515,31 @@ res_rec_conf (Btor *btor,
   btor_mem_freestr (mm, sbve);
   btor_mem_freestr (mm, sbvexp);
 #endif
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
     BtorPropSolver *slv = BTOR_PROP_SOLVER (btor);
-#ifndef NDEBUG
-    /* fix counters since we always increase the counter, even in the conflict
-     * case */
-    switch (exp->kind)
-    {
-      case BTOR_BV_ADD_NODE: slv->stats.inv_add -= 1; break;
-      case BTOR_BV_AND_NODE: slv->stats.inv_and -= 1; break;
-      case BTOR_BV_EQ_NODE: slv->stats.inv_eq -= 1; break;
-      case BTOR_BV_ULT_NODE: slv->stats.inv_ult -= 1; break;
-      case BTOR_BV_SLL_NODE: slv->stats.inv_sll -= 1; break;
-      case BTOR_BV_SRL_NODE: slv->stats.inv_srl -= 1; break;
-      case BTOR_BV_MUL_NODE: slv->stats.inv_mul -= 1; break;
-      case BTOR_BV_UDIV_NODE: slv->stats.inv_udiv -= 1; break;
-      case BTOR_BV_UREM_NODE: slv->stats.inv_urem -= 1; break;
-      case BTOR_BV_CONCAT_NODE:
-        slv->stats.inv_concat -= 1;
-        break;
-      case BTOR_BV_SLICE_NODE: slv->stats.inv_slice -= 1; break;
-      default:
-        assert (btor_node_is_bv_cond (exp));
-        /* do not decrease, we do not call cons function in conflict case */
-    }
-#endif
     if (is_recoverable)
     {
+#ifndef NDEBUG
+      /* fix counters since we always increase the counter, even in the conflict
+       * case  (except for slice and cond where inv = cons) */
+      switch (exp->kind)
+      {
+        case BTOR_BV_ADD_NODE: slv->stats.inv_add -= 1; break;
+        case BTOR_BV_AND_NODE: slv->stats.inv_and -= 1; break;
+        case BTOR_BV_EQ_NODE: slv->stats.inv_eq -= 1; break;
+        case BTOR_BV_ULT_NODE: slv->stats.inv_ult -= 1; break;
+        case BTOR_BV_SLL_NODE: slv->stats.inv_sll -= 1; break;
+        case BTOR_BV_SRL_NODE: slv->stats.inv_srl -= 1; break;
+        case BTOR_BV_MUL_NODE: slv->stats.inv_mul -= 1; break;
+        case BTOR_BV_UDIV_NODE: slv->stats.inv_udiv -= 1; break;
+        case BTOR_BV_UREM_NODE: slv->stats.inv_urem -= 1; break;
+        case BTOR_BV_CONCAT_NODE: slv->stats.inv_concat -= 1; break;
+        default:
+          assert (btor_node_is_bv_slice (exp) || btor_node_is_bv_cond (exp));
+          /* do not decrease, we do not call cons function in conflict case */
+      }
+#endif
       slv->stats.rec_conf += 1;
       /* recoverable conflict, push entailed propagation */
       assert (exp->arity == 2);
@@ -1564,6 +1548,10 @@ res_rec_conf (Btor *btor,
         BtorPropInfo prop = {exp, btor_bv_copy (mm, bvexp), eidx ? 0 : 1};
         BTOR_PUSH_STACK (slv->toprop, prop);
       }
+      /* fix counter since we always increase the counter, even in the conflict
+       * case (except for slice and cond, where inv = cons)*/
+      if (!btor_node_is_bv_slice (exp) && !btor_node_is_bv_cond (exp))
+        slv->stats.props_inv -= 1;
     }
     else
     {
@@ -1571,9 +1559,6 @@ res_rec_conf (Btor *btor,
       /* non-recoverable conflict, entailed propagations are thus invalid */
       btor_proputils_reset_prop_info_stack (mm, &slv->toprop);
     }
-    /* fix counter since we always increase the counter, even in the conflict
-     * case */
-    slv->stats.props_inv -= 1;
   }
   else
   {
@@ -1663,7 +1648,7 @@ inv_add_bv (Btor *btor,
   (void) add;
   (void) eidx;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_add++;
@@ -1707,7 +1692,7 @@ inv_and_bv (Btor *btor,
   BtorUIntStack dcbits;
   bool b;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_and++;
@@ -1799,7 +1784,7 @@ inv_eq_bv (Btor *btor,
   BtorBitVector *res;
   BtorMemMgr *mm;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_eq++;
@@ -1878,7 +1863,7 @@ inv_ult_bv (Btor *btor,
   bool is_inv = true;
 #endif
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_ult++;
@@ -1992,7 +1977,7 @@ inv_sll_bv (Btor *btor,
   bool is_inv = true;
 #endif
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_sll++;
@@ -2140,7 +2125,7 @@ inv_srl_bv (Btor *btor,
   bool is_inv = true;
 #endif
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_srl++;
@@ -2291,7 +2276,7 @@ inv_mul_bv (Btor *btor,
   bool is_inv = true;
 #endif
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_mul++;
@@ -2486,7 +2471,7 @@ inv_udiv_bv (Btor *btor,
   bool is_inv = true;
 #endif
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_udiv++;
@@ -2745,7 +2730,7 @@ inv_urem_bv (Btor *btor,
   bool is_inv = true;
 #endif
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_urem++;
@@ -3078,7 +3063,7 @@ inv_concat_bv (Btor *btor,
   bool is_inv = true;
 #endif
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_concat++;
@@ -3170,7 +3155,7 @@ inv_slice_bv (Btor *btor,
   BtorMemMgr *mm;
   bool bkeep, bflip;
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_slice++;
@@ -3305,7 +3290,7 @@ inv_cond_bv (Btor *btor,
   char *sbve2         = btor_bv_to_char (mm, bve2);
 #endif
 
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
     BTOR_PROP_SOLVER (btor)->stats.inv_cond++;
@@ -3351,7 +3336,7 @@ inv_cond_bv (Btor *btor,
       }
       BTORLOG (2, "");
 #endif
-      if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+      if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
       {
         if (is_recoverable)
           BTOR_PROP_SOLVER (btor)->stats.rec_conf += 1;
@@ -3453,14 +3438,14 @@ btor_proputils_select_move_prop (Btor *btor,
   nprops      = 0;
 
 #ifndef NBTORLOG
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
     nrecconf_prev = BTOR_PROP_SOLVER (btor)->stats.rec_conf;
     nnonrecconf_prev = BTOR_PROP_SOLVER (btor)->stats.non_rec_conf;
   }
   else
   {
-    assert (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_SLS);
+    assert (btor->slv->kind == BTOR_SLS_SOLVER_KIND);
     nrecconf_prev = BTOR_SLS_SOLVER (btor)->stats.move_prop_rec_conf;
     nnonrecconf_prev = BTOR_SLS_SOLVER (btor)->stats.move_prop_non_rec_conf;
   }
@@ -3469,7 +3454,7 @@ btor_proputils_select_move_prop (Btor *btor,
   tmp = (BtorBitVector *) btor_model_get_bv (btor, root);
   if (!btor_bv_compare (bvroot, tmp))
   {
-    if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+    if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
       BTOR_PROP_SOLVER (btor)->stats.fixed_conf++;
     goto DONE;
   }
@@ -3495,7 +3480,6 @@ btor_proputils_select_move_prop (Btor *btor,
     }
     else
     {
-      nprops += 1;
       assert (!btor_node_is_bv_const (cur));
 
       if (btor_node_is_inverted (cur))
@@ -3584,8 +3568,16 @@ btor_proputils_select_move_prop (Btor *btor,
 
       if (eidx == -1) eidx = select_path (btor, real_cur, bvcur, bve);
 
+#ifndef NDEBUG
+      if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
+      {
+        BtorPropInfo prop = {real_cur, btor_bv_copy (btor->mm, bvcur), eidx};
+        BTOR_PUSH_STACK (BTOR_PROP_SOLVER (btor)->prop_path, prop);
+      }
+#endif
       cur = select_move (
           btor, real_cur, bvcur, bve, eidx, compute_value, &bvenew);
+      nprops += 1;
 
       if (!bvenew) break; /* non-recoverable conflict */
 
@@ -3599,14 +3591,14 @@ btor_proputils_select_move_prop (Btor *btor,
 
 DONE:
 #ifndef NBTORLOG
-  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
     nrecconf = BTOR_PROP_SOLVER (btor)->stats.rec_conf;
     nnonrecconf = BTOR_PROP_SOLVER (btor)->stats.non_rec_conf;
   }
   else
   {
-    assert (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_SLS);
+    assert (btor->slv->kind == BTOR_SLS_SOLVER_KIND);
     nrecconf = BTOR_SLS_SOLVER (btor)->stats.move_prop_rec_conf;
     nnonrecconf = BTOR_SLS_SOLVER (btor)->stats.move_prop_non_rec_conf;
   }

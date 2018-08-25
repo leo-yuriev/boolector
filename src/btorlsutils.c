@@ -93,8 +93,8 @@ btor_lsutils_update_cone (Btor *btor,
                           double *time_update_cone_compute_score)
 {
   assert (btor);
-  assert (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP
-          || btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_SLS);
+  assert (btor->slv->kind == BTOR_PROP_SOLVER_KIND
+          || btor->slv->kind == BTOR_SLS_SOLVER_KIND);
   assert (bv_model);
   assert (roots);
   assert (exps);

@@ -424,8 +424,8 @@ btor_slsutils_compute_sls_scores (Btor *btor,
                                   BtorIntHashTable *score)
 {
   assert (btor);
-  assert (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP
-          || btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_SLS);
+  assert (btor->slv->kind == BTOR_PROP_SOLVER_KIND
+          || btor->slv->kind == BTOR_SLS_SOLVER_KIND);
   assert (bv_model);
   assert (fun_model);
   assert (score);
