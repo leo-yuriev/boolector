@@ -3444,11 +3444,27 @@ btor_proputils_select_move_prop (Btor *btor,
       Btor *, BtorNode *, BtorBitVector *, BtorBitVector *, int32_t);
 #ifndef NBTORLOG
   char *a;
+  uint32_t nrecconf_prev, nnonrecconf_prev, nrecconf, nnonrecconf;
+  uint32_t ncons = 0;
 #endif
 
   *input      = 0;
   *assignment = 0;
   nprops      = 0;
+
+#ifndef NBTORLOG
+  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  {
+    nrecconf_prev = BTOR_PROP_SOLVER (btor)->stats.rec_conf;
+    nnonrecconf_prev = BTOR_PROP_SOLVER (btor)->stats.non_rec_conf;
+  }
+  else
+  {
+    assert (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_SLS);
+    nrecconf_prev = BTOR_SLS_SOLVER (btor)->stats.move_prop_rec_conf;
+    nnonrecconf_prev = BTOR_SLS_SOLVER (btor)->stats.move_prop_non_rec_conf;
+  }
+#endif
 
   tmp = (BtorBitVector *) btor_model_get_bv (btor, root);
   if (!btor_bv_compare (bvroot, tmp))
@@ -3509,6 +3525,9 @@ btor_proputils_select_move_prop (Btor *btor,
        * -> if b then inverse else consistent */
       b = btor_rng_pick_with_prob (
           &btor->rng, btor_opt_get (btor, BTOR_OPT_PROP_PROB_USE_INV_VALUE));
+#ifndef NBTORLOG
+      if (!b) ncons += 1;
+#endif
 
       /* select path and determine path assignment */
       switch (real_cur->kind)
@@ -3579,6 +3598,30 @@ btor_proputils_select_move_prop (Btor *btor,
   btor_bv_free (btor->mm, bvcur);
 
 DONE:
+#ifndef NBTORLOG
+  if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
+  {
+    nrecconf = BTOR_PROP_SOLVER (btor)->stats.rec_conf;
+    nnonrecconf = BTOR_PROP_SOLVER (btor)->stats.non_rec_conf;
+  }
+  else
+  {
+    assert (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_SLS);
+    nrecconf = BTOR_SLS_SOLVER (btor)->stats.move_prop_rec_conf;
+    nnonrecconf = BTOR_SLS_SOLVER (btor)->stats.move_prop_non_rec_conf;
+  }
+  nrecconf -= nrecconf_prev;
+  nnonrecconf -= nnonrecconf_prev;
+  ncons += nrecconf;
+  BTORLOG (1, "");
+  BTORLOG (1, "propagation path:");
+  BTORLOG (1, "    length: %u", nprops);
+  BTORLOG (1, "        inverse value props: %u", nprops - ncons);
+  BTORLOG (1, "        consistent value props: %u", ncons);
+  BTORLOG (1, "    conflicts: %u", nrecconf + nnonrecconf);
+  BTORLOG (1, "        recoverable conflicts: %u", nrecconf);
+  BTORLOG (1, "        non-recoverable conflicts: %u", nnonrecconf);
+#endif
   return nprops;
 }
 
