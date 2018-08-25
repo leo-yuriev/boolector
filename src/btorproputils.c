@@ -1530,30 +1530,25 @@ res_rec_conf (Btor *btor,
 #endif
   if (btor_opt_get (btor, BTOR_OPT_ENGINE) == BTOR_ENGINE_PROP)
   {
+    BtorPropSolver *slv = BTOR_PROP_SOLVER (btor);
 #ifndef NDEBUG
     /* fix counters since we always increase the counter, even in the conflict
      * case */
     switch (exp->kind)
     {
-      case BTOR_BV_ADD_NODE: BTOR_PROP_SOLVER (btor)->stats.inv_add -= 1; break;
-      case BTOR_BV_AND_NODE: BTOR_PROP_SOLVER (btor)->stats.inv_and -= 1; break;
-      case BTOR_BV_EQ_NODE: BTOR_PROP_SOLVER (btor)->stats.inv_eq -= 1; break;
-      case BTOR_BV_ULT_NODE: BTOR_PROP_SOLVER (btor)->stats.inv_ult -= 1; break;
-      case BTOR_BV_SLL_NODE: BTOR_PROP_SOLVER (btor)->stats.inv_sll -= 1; break;
-      case BTOR_BV_SRL_NODE: BTOR_PROP_SOLVER (btor)->stats.inv_srl -= 1; break;
-      case BTOR_BV_MUL_NODE: BTOR_PROP_SOLVER (btor)->stats.inv_mul -= 1; break;
-      case BTOR_BV_UDIV_NODE:
-        BTOR_PROP_SOLVER (btor)->stats.inv_udiv -= 1;
-        break;
-      case BTOR_BV_UREM_NODE:
-        BTOR_PROP_SOLVER (btor)->stats.inv_urem -= 1;
-        break;
+      case BTOR_BV_ADD_NODE: slv->stats.inv_add -= 1; break;
+      case BTOR_BV_AND_NODE: slv->stats.inv_and -= 1; break;
+      case BTOR_BV_EQ_NODE: slv->stats.inv_eq -= 1; break;
+      case BTOR_BV_ULT_NODE: slv->stats.inv_ult -= 1; break;
+      case BTOR_BV_SLL_NODE: slv->stats.inv_sll -= 1; break;
+      case BTOR_BV_SRL_NODE: slv->stats.inv_srl -= 1; break;
+      case BTOR_BV_MUL_NODE: slv->stats.inv_mul -= 1; break;
+      case BTOR_BV_UDIV_NODE: slv->stats.inv_udiv -= 1; break;
+      case BTOR_BV_UREM_NODE: slv->stats.inv_urem -= 1; break;
       case BTOR_BV_CONCAT_NODE:
-        BTOR_PROP_SOLVER (btor)->stats.inv_concat -= 1;
+        slv->stats.inv_concat -= 1;
         break;
-      case BTOR_BV_SLICE_NODE:
-        BTOR_PROP_SOLVER (btor)->stats.inv_slice -= 1;
-        break;
+      case BTOR_BV_SLICE_NODE: slv->stats.inv_slice -= 1; break;
       default:
         assert (btor_node_is_bv_cond (exp));
         /* do not decrease, we do not call cons function in conflict case */
@@ -1561,25 +1556,24 @@ res_rec_conf (Btor *btor,
 #endif
     if (is_recoverable)
     {
-      BTOR_PROP_SOLVER (btor)->stats.rec_conf += 1;
+      slv->stats.rec_conf += 1;
       /* recoverable conflict, push entailed propagation */
       assert (exp->arity == 2);
       if (btor_opt_get (btor, BTOR_OPT_PROP_ENTAILED))
       {
         BtorPropInfo prop = {exp, btor_bv_copy (mm, bvexp), eidx ? 0 : 1};
-        BTOR_PUSH_STACK (BTOR_PROP_SOLVER (btor)->toprop, prop);
+        BTOR_PUSH_STACK (slv->toprop, prop);
       }
     }
     else
     {
-      BTOR_PROP_SOLVER (btor)->stats.non_rec_conf += 1;
+      slv->stats.non_rec_conf += 1;
       /* non-recoverable conflict, entailed propagations are thus invalid */
-      btor_proputils_reset_prop_info_stack (
-          mm, &BTOR_PROP_SOLVER (btor)->toprop);
+      btor_proputils_reset_prop_info_stack (mm, &slv->toprop);
     }
     /* fix counter since we always increase the counter, even in the conflict
      * case */
-    BTOR_PROP_SOLVER (btor)->stats.props_inv -= 1;
+    slv->stats.props_inv -= 1;
   }
   else
   {
