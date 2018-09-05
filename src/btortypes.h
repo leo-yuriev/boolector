@@ -606,10 +606,17 @@ enum BtorOption
   /*!
     * **BTOR_OPT_PROP_ENTAILED**
 
-      Enable (``value``: 1) or disable (``value``: 0) maintaining a work queue
-      with entailed propagations. If enabled, propagations from this queue are
-      propagated before randomly choosing a yet unsatisfied path from the root.
-   */
+      Maintain a work queue with entailed propagations.
+      If enabled, propagations from this queue are propagated before randomly
+      choosing a yet unsatisfied path from the root.
+
+      This feature is disabled (BTOR_PROP_ENTAILED_OFF) by default.
+
+      * BTOR_PROP_ENTAILED_OFF: do not use strategy (default)
+      * BTOR_PROP_ENTAILED_ALL: propagate all entailed propagations
+      * BTOR_PROP_ENTAILED_FIRST: process only the first entailed propagation
+      * BTOR_PROP_ENTAILED_LAST: process only the last entailed propagation
+  */
   BTOR_OPT_PROP_ENTAILED,
 
   /*!

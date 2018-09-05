@@ -135,6 +135,9 @@ move (Btor *btor)
   BtorPropInfo prop;
   int32_t eidx;
   uint64_t props, nprops;
+#ifndef NBTORLOG
+  size_t i;
+#endif
 
   slv = BTOR_PROP_SOLVER (btor);
   assert (slv);
@@ -151,6 +154,17 @@ move (Btor *btor)
 #endif
 
     if (bvroot) btor_bv_free (btor->mm, bvroot);
+
+#ifndef NBTORLOG
+    BTORLOG (1, "entailed propagations: %u", BTOR_COUNT_STACK (slv->toprop));
+    for (i = 0; i < BTOR_COUNT_STACK (slv->toprop); i++)
+    {
+      BtorPropInfo *p = &slv->toprop.start[i];
+      char *bvprop    = btor_bv_to_char (btor->mm, p->bvexp);
+      BTORLOG (1, "  %s: %s", btor_util_node2string (p->exp), bvprop);
+      btor_mem_freestr (btor->mm, bvprop);
+    }
+#endif
 
     if (BTOR_EMPTY_STACK (slv->toprop))
     {
@@ -212,7 +226,7 @@ move (Btor *btor)
   btor_hashint_map_delete (exps);
 
 #ifndef NDEBUG
-  size_t i, cnt;
+  size_t cnt;
   BtorBitVector *bvass, *bvtarget;
   BtorNode *n;
   cnt = BTOR_COUNT_STACK (slv->prop_path);

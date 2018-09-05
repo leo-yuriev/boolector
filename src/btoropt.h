@@ -176,6 +176,18 @@ enum BtorOptPropPathSel
 #define BTOR_PROP_PATH_SEL_DFLT BTOR_PROP_PATH_SEL_ESSENTIAL
 typedef enum BtorOptPropPathSel BtorOptPropPathSel;
 
+enum BtorOptPropEntailed
+{
+  BTOR_PROP_ENTAILED_MIN,
+  BTOR_PROP_ENTAILED_OFF,
+  BTOR_PROP_ENTAILED_ALL,
+  BTOR_PROP_ENTAILED_FIRST,
+  BTOR_PROP_ENTAILED_LAST,
+  BTOR_PROP_ENTAILED_MAX,
+};
+#define BTOR_PROP_ENTAILED_DFLT BTOR_PROP_ENTAILED_OFF
+typedef enum BtorOptPropEntailed BtorOptPropEntailed;
+
 enum BtorOptQuantSynth
 {
   BTOR_QUANT_SYNTH_MIN,

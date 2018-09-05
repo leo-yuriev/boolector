@@ -1478,7 +1478,7 @@ res_rec_conf (Btor *btor,
   (void) e;
 
   bool is_recoverable;
-  uint32_t no_move_on_conflict;
+  uint32_t no_move_on_conflict, prop_entailed;
   BtorBitVector *res;
   BtorMemMgr *mm;
 
@@ -1543,10 +1543,22 @@ res_rec_conf (Btor *btor,
       slv->stats.rec_conf += 1;
       /* recoverable conflict, push entailed propagation */
       assert (exp->arity == 2);
-      if (btor_opt_get (btor, BTOR_OPT_PROP_ENTAILED))
+      prop_entailed = btor_opt_get (btor, BTOR_OPT_PROP_ENTAILED);
+      if (prop_entailed != BTOR_PROP_ENTAILED_OFF)
       {
         BtorPropInfo prop = {exp, btor_bv_copy (mm, bvexp), eidx ? 0 : 1};
-        BTOR_PUSH_STACK (slv->toprop, prop);
+        if (BTOR_EMPTY_STACK (slv->toprop)
+            || prop_entailed == BTOR_PROP_ENTAILED_ALL)
+        {
+          BTOR_PUSH_STACK (slv->toprop, prop);
+        }
+        else if (prop_entailed == BTOR_PROP_ENTAILED_LAST)
+        {
+          assert (BTOR_COUNT_STACK (slv->toprop) == 1);
+          BTOR_POKE_STACK (slv->toprop, 0, prop);
+        }
+        assert (prop_entailed == BTOR_PROP_ENTAILED_ALL
+                || BTOR_COUNT_STACK (slv->toprop) == 1);
       }
       /* fix counter since we always increase the counter, even in the conflict
        * case (except for slice and cond, where inv = cons)*/
