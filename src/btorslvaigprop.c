@@ -206,6 +206,7 @@ sat_aigprop_solver (BtorAIGPropSolver *slv)
 
   if (btor_terminate (btor))
   {
+  UNKNOWN:
     sat_result = BTOR_RESULT_UNKNOWN;
     goto DONE;
   }
@@ -262,11 +263,17 @@ sat_aigprop_solver (BtorAIGPropSolver *slv)
       (void) btor_hashint_table_add (roots, btor_aig_get_id (aig));
   }
 
-  if ((sat_result = aigprop_sat (slv->aprop, roots)) == BTOR_RESULT_UNSAT)
+  sat_result = aigprop_sat (slv->aprop, roots);
+  if (sat_result == AIGPROP_UNKNOWN)
+    goto UNKNOWN;
+  else if (sat_result == AIGPROP_UNSAT)
     goto UNSAT;
+  assert (sat_result == AIGPROP_SAT);
+  sat_result = BTOR_RESULT_SAT;
   generate_model_from_aig_model (btor);
-  assert (sat_result == BTOR_RESULT_SAT);
+DONE:
   slv->stats.moves                  = slv->aprop->stats.moves;
+  slv->stats.props                  = slv->aprop->stats.props;
   slv->stats.restarts               = slv->aprop->stats.restarts;
   slv->time.aprop_sat               = slv->aprop->time.sat;
   slv->time.aprop_update_cone       = slv->aprop->time.update_cone;
@@ -275,7 +282,6 @@ sat_aigprop_solver (BtorAIGPropSolver *slv)
       slv->aprop->time.update_cone_model_gen;
   slv->time.aprop_update_cone_compute_score =
       slv->aprop->time.update_cone_compute_score;
-DONE:
   if (slv->aprop->model)
   {
     btor_hashint_map_delete (slv->aprop->model);
@@ -300,10 +306,17 @@ print_stats_aigprop_solver (BtorAIGPropSolver *slv)
   BTOR_MSG (btor->msg, 1, "");
   BTOR_MSG (btor->msg, 1, "restarts: %d", slv->stats.restarts);
   BTOR_MSG (btor->msg, 1, "moves: %d", slv->stats.moves);
-  BTOR_MSG (btor->msg,
-            1,
-            "moves per second: %.2f",
-            (double) slv->stats.moves / slv->time.aprop_sat);
+  BTOR_MSG (
+      btor->msg,
+      1,
+      "moves per second: %.2f",
+      slv->stats.moves ? (double) slv->stats.moves / slv->time.aprop_sat : 0.0);
+  BTOR_MSG (btor->msg, 1, "props: %d", slv->stats.props);
+  BTOR_MSG (
+      btor->msg,
+      1,
+      "props per second: %.2f",
+      slv->stats.props ? (double) slv->stats.props / slv->time.aprop_sat : 0.0);
 }
 
 static void
@@ -372,7 +385,8 @@ btor_new_aigprop_solver (Btor *btor)
                            btor_opt_get (btor, BTOR_OPT_LOGLEVEL),
                            btor_opt_get (btor, BTOR_OPT_SEED),
                            btor_opt_get (btor, BTOR_OPT_AIGPROP_USE_RESTARTS),
-                           btor_opt_get (btor, BTOR_OPT_AIGPROP_USE_BANDIT));
+                           btor_opt_get (btor, BTOR_OPT_AIGPROP_USE_BANDIT),
+                           btor_opt_get (btor, BTOR_OPT_AIGPROP_NPROPS));
 
   BTOR_MSG (btor->msg, 1, "enabled aigprop engine");
 

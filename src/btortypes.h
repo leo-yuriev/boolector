@@ -781,6 +781,14 @@ enum BtorOption
   */
   BTOR_OPT_AIGPROP_USE_BANDIT,
 
+  /*!
+    * **BTOR_OPT_AIGPROP_NPROPS**
+
+      Set the number of propagation (steps) used as a limit for the (bit-level)
+      propagation engine. Disabled if 0.
+   */
+  BTOR_OPT_AIGPROP_NPROPS,
+
   /* QUANT engine ------------------------------------------------------- */
   /*!
    * **BTOR_OPT_QUANT_SYNTH**

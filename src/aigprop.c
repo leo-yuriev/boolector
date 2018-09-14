@@ -1,6 +1,6 @@
 /*  Boolector: Satisfiability Modulo Theories (SMT) solver.
  *
- *  Copyright (C) 2015-2017 Aina Niemetz.
+ *  Copyright (C) 2015-2018 Aina Niemetz.
  *
  *  This file is part of Boolector.
  *  See COPYING for more information on using this software.
@@ -777,7 +777,7 @@ select_root (AIGProp *aprop, uint32_t nmoves)
   return res;
 }
 
-static void
+static bool
 select_move (AIGProp *aprop,
              BtorAIG *root,
              BtorAIG **input,
@@ -789,16 +789,21 @@ select_move (AIGProp *aprop,
   assert (input);
   assert (assignment);
 
+  bool res;
   int32_t i, asscur, ass[2], assnew;
   uint32_t eidx;
+  uint64_t nprops, max_nprops;
   BtorAIG *cur, *real_cur, *c[2];
   BtorHashTableData *d;
 
   *input      = 0;
   *assignment = 0;
 
-  cur    = root;
-  asscur = 1;
+  cur        = root;
+  asscur     = 1;
+  nprops     = aprop->stats.props;
+  max_nprops = aprop->nprops;
+  res        = true;
 
   if (btor_aig_is_var (BTOR_REAL_ADDR_AIG (cur)))
   {
@@ -809,6 +814,12 @@ select_move (AIGProp *aprop,
   {
     for (;;)
     {
+      if (max_nprops && nprops >= max_nprops)
+      {
+        res = false;
+        break;
+      }
+
       real_cur = BTOR_REAL_ADDR_AIG (cur);
       assert (btor_aig_is_and (real_cur));
       asscur = BTOR_IS_INVERTED_AIG (cur) ? -asscur : asscur;
@@ -857,6 +868,7 @@ select_move (AIGProp *aprop,
 
       cur    = c[eidx];
       asscur = assnew;
+      nprops += 1;
 
       if (btor_aig_is_var (BTOR_REAL_ADDR_AIG (cur)))
       {
@@ -866,6 +878,8 @@ select_move (AIGProp *aprop,
       }
     }
   }
+  aprop->stats.props = nprops;
+  return res;
 }
 
 static int32_t
@@ -880,25 +894,26 @@ move (AIGProp *aprop, uint32_t nmoves)
   BtorAIG *root, *input;
 
   /* roots contain false AIG -> unsat */
-  if (!(root = select_root (aprop, nmoves))) return 0;
+  if (!(root = select_root (aprop, nmoves))) return -1;
 
-  select_move (aprop, root, &input, &assignment);
-
-  AIGPROPLOG (1, "");
-  AIGPROPLOG (1, "*** move");
+  if (select_move (aprop, root, &input, &assignment))
+  {
+    AIGPROPLOG (1, "");
+    AIGPROPLOG (1, "*** move");
 #ifndef NDEBUG
-  int32_t a = aigprop_get_assignment_aig (aprop, input);
-  AIGPROPLOG (1,
-              "    * input: %s%d",
-              BTOR_IS_INVERTED_AIG (input) ? "-" : "",
-              BTOR_REAL_ADDR_AIG (input)->id);
-  AIGPROPLOG (1, "      prev. assignment: %d", a);
-  AIGPROPLOG (1, "      new   assignment: %d", assignment);
+    int32_t a = aigprop_get_assignment_aig (aprop, input);
+    AIGPROPLOG (1,
+                "    * input: %s%d",
+                BTOR_IS_INVERTED_AIG (input) ? "-" : "",
+                BTOR_REAL_ADDR_AIG (input)->id);
+    AIGPROPLOG (1, "      prev. assignment: %d", a);
+    AIGPROPLOG (1, "      new   assignment: %d", assignment);
 #endif
-
-  update_cone (aprop, input, assignment);
-  aprop->stats.moves += 1;
-  return 1;
+    update_cone (aprop, input, assignment);
+    aprop->stats.moves += 1;
+    return 1;
+  }
+  return 0;
 }
 
 /*------------------------------------------------------------------------*/
@@ -911,7 +926,7 @@ aigprop_sat (AIGProp *aprop, BtorIntHashTable *roots)
   assert (roots);
 
   double start;
-  int32_t i, j, max_steps, sat_result, rootid, childid;
+  int32_t i, j, max_steps, sat_result, rootid, childid, move_res;
   uint32_t nmoves;
   BtorMemMgr *mm;
   BtorIntHashTable *cache;
@@ -1017,7 +1032,12 @@ aigprop_sat (AIGProp *aprop, BtorIntHashTable *roots)
          !aprop->use_restarts || j < max_steps;
          j++)
     {
-      if (!(move (aprop, nmoves))) goto UNSAT;
+      move_res = move (aprop, nmoves);
+      if (move_res == -1)
+        goto UNSAT;
+      else if (move_res == 0)
+        goto UNKNOWN;
+      assert (move_res == 1);
       nmoves += 1;
       if (!aprop->unsatroots->count) goto SAT;
     }
@@ -1035,6 +1055,9 @@ SAT:
   goto DONE;
 UNSAT:
   sat_result = AIGPROP_UNSAT;
+  goto DONE;
+UNKNOWN:
+  sat_result = AIGPROP_UNKNOWN;
 DONE:
   btor_iter_hashint_init (&it, aprop->parents);
   while (btor_iter_hashint_has_next (&it))
@@ -1085,7 +1108,8 @@ aigprop_new_aigprop (BtorAIGMgr *amgr,
                      uint32_t loglevel,
                      uint32_t seed,
                      uint32_t use_restarts,
-                     uint32_t use_bandit)
+                     uint32_t use_bandit,
+                     uint64_t nprops)
 {
   assert (amgr);
 
@@ -1098,6 +1122,7 @@ aigprop_new_aigprop (BtorAIGMgr *amgr,
   res->seed         = seed;
   res->use_restarts = use_restarts;
   res->use_bandit   = use_bandit;
+  res->nprops       = nprops;
 
   return res;
 }

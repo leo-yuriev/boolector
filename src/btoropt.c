@@ -1093,6 +1093,16 @@ btor_opt_init_opts (Btor *btor)
             0,
             1,
             "use bandit scheme for constraint selection");
+  init_opt (btor,
+            BTOR_OPT_AIGPROP_NPROPS,
+            false,
+            false,
+            "aigprop:nprops",
+            0,
+            0,
+            0,
+            UINT32_MAX,
+            "number of propagation steps used as a limit for aigprop engine");
 
   /* QUANT engine ----------------------------------------------------------- */
   init_opt (btor,
