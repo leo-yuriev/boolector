@@ -5,6 +5,7 @@ set(test_src_files
   testarithmetic.c
   testboolectornodemap.c
   testbv.c
+  testcbits.c
   testcomp.c
   testexp.c
   testhash.c
