@@ -1615,6 +1615,7 @@ inv_add_bv (
    * res +   s = t   |->   res = t - s
    * s   + res = t   |
    */
+
   res = btor_bv_sub (btor->mm, t, s);
 #ifndef NDEBUG
   check_result_binary_dbg (btor, btor_bv_add, add, s, t, res, eidx, "+");
@@ -1735,6 +1736,8 @@ inv_eq_bv (
   BtorBitVector *res;
   BtorMemMgr *mm;
 
+  mm = btor->mm;
+
   if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
 #ifndef NDEBUG
@@ -1743,11 +1746,14 @@ inv_eq_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  mm = btor->mm;
+  /**
+   * invertibility condition: true
+   * (res = s) = t   ->   t = 0: choose random res != s
+   *                      t = 1: res = s
+   */
 
   if (btor_bv_is_zero (t))
   {
-    /* res != t -> choose random res != t ----------------------------------- */
     if (btor_rng_pick_with_prob (
             &btor->rng, btor_opt_get (btor, BTOR_OPT_PROP_PROB_EQ_FLIP)))
     {
@@ -1772,7 +1778,6 @@ inv_eq_bv (
   }
   else
   {
-    /* res = t -------------------------------------------------------------- */
     res = btor_bv_copy (mm, s);
   }
 
