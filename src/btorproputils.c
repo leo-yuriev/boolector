@@ -1812,9 +1812,8 @@ inv_ult_bv (
   BtorNode *e;
   BtorBitVector *res, *zero, *one, *bvmax, *tmp;
   BtorMemMgr *mm;
-#ifndef NDEBUG
-  bool is_inv = true;
-#endif
+
+  mm = btor->mm;
 
   if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
@@ -1824,9 +1823,14 @@ inv_ult_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  mm = btor->mm;
   e  = ult->e[eidx ? 0 : 1];
   assert (e);
+
+  /* check invertibility, if not invertible: CONFLICT */
+  if (!btor_is_inv_ult (mm, s, t, eidx))
+  {
+    return res_rec_conf (btor, ult, e, t, s, eidx, cons_ult_bv, "<");
+  }
 
   zero  = btor_bv_new (mm, s->width);
   one   = btor_bv_one (mm, s->width);
@@ -1838,58 +1842,39 @@ inv_ult_bv (
 
   if (eidx)
   {
-    if (!btor_bv_compare (s, bvmax) && isult)
+    assert (!isult || btor_bv_compare (s, bvmax)); /* CONFLICT: 1...1 < e[1] */
+    if (!isult)
     {
-    BVULT_CONF:
-      /* CONFLICT: 1...1 < e[1] --------------------------------------------- */
-      res = res_rec_conf (btor, ult, e, t, s, eidx, cons_ult_bv, "<");
-#ifndef NDEBUG
-      is_inv = false;
-#endif
+      /* s >= e[1] -------------------------------------------------------- */
+      res = btor_bv_new_random_range (mm, &btor->rng, bw, zero, s);
     }
     else
     {
-      if (!isult)
-      {
-        /* s >= e[1] -------------------------------------------------------- */
-        res = btor_bv_new_random_range (mm, &btor->rng, bw, zero, s);
-      }
-      else
-      {
-        /* s < e[1] --------------------------------------------------------- */
-        tmp = btor_bv_add (mm, s, one);
-        res = btor_bv_new_random_range (mm, &btor->rng, bw, tmp, bvmax);
-        btor_bv_free (mm, tmp);
-      }
+      /* s < e[1] --------------------------------------------------------- */
+      tmp = btor_bv_add (mm, s, one);
+      res = btor_bv_new_random_range (mm, &btor->rng, bw, tmp, bvmax);
+      btor_bv_free (mm, tmp);
     }
   }
   else
   {
-    if (btor_bv_is_zero (s) && isult)
+    assert (!isult || !btor_bv_is_zero (s)); /* CONFLICT: e[0] < 0  */
+    if (!isult)
     {
-      /* CONFLICT: e[0] < 0 ------------------------------------------------- */
-      goto BVULT_CONF;
+      /* e[0] >= s -------------------------------------------------------- */
+      res = btor_bv_new_random_range (mm, &btor->rng, bw, s, bvmax);
     }
     else
     {
-      if (!isult)
-      {
-        /* e[0] >= s -------------------------------------------------------- */
-        res = btor_bv_new_random_range (mm, &btor->rng, bw, s, bvmax);
-      }
-      else
-      {
-        /* e[0] < s --------------------------------------------------------- */
-        tmp = btor_bv_sub (mm, s, one);
-        res = btor_bv_new_random_range (mm, &btor->rng, bw, zero, tmp);
-        btor_bv_free (mm, tmp);
-      }
+      /* e[0] < s --------------------------------------------------------- */
+      tmp = btor_bv_sub (mm, s, one);
+      res = btor_bv_new_random_range (mm, &btor->rng, bw, zero, tmp);
+      btor_bv_free (mm, tmp);
     }
   }
 
 #ifndef NDEBUG
-  if (is_inv)
-    check_result_binary_dbg (btor, btor_bv_ult, ult, s, t, res, eidx, "<");
+  check_result_binary_dbg (btor, btor_bv_ult, ult, s, t, res, eidx, "<");
 #endif
   btor_bv_free (mm, zero);
   btor_bv_free (mm, one);

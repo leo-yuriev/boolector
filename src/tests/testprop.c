@@ -105,8 +105,11 @@ prop_complete_binary_eidx (
   btor_model_add_to_bv (g_btor, g_btor->bv_model, e[eidx], bvetmp[eidx]);
   btor_model_add_to_bv (g_btor, g_btor->bv_model, exp, bvexptmp);
 
-  // printf ("eidx %d bvetmp[0] %s bvetmp[1] %s\n", eidx, btor_bv_to_char (g_mm,
-  // bvetmp[0]), btor_bv_to_char (g_mm, bvetmp[1]));
+  // printf ("eidx %d bvetmp[0] %s bvetmp[1] %s target %s\n",
+  //        eidx,
+  //        btor_bv_to_char (g_mm, bvetmp[0]),
+  //        btor_bv_to_char (g_mm, bvetmp[1]),
+  //        btor_bv_to_char (g_mm, bvexp));
   /* -> first test local completeness  */
   /* we must find a solution within n move(s) */
   res[eidx] = inv_bv (g_btor, exp, bvexp, bve, eidx);
@@ -157,6 +160,8 @@ prop_complete_binary_eidx (
   btor_sort_release (g_btor, sort1);
   sat_res = sat_prop_solver_aux (g_btor);
   assert (sat_res == BTOR_RESULT_SAT);
+  // printf ("moves %u n %u\n", ((BtorPropSolver *) g_btor->slv)->stats.moves,
+  // n);
   assert (((BtorPropSolver *) g_btor->slv)->stats.moves <= n);
   btor_reset_incremental_usage (g_btor);
 }
@@ -188,9 +193,10 @@ prop_complete_binary (uint32_t n,
     {
       bve[1] = btor_bv_uint64_to_bv (g_mm, j, bw1);
       bvexp  = create_bv (g_mm, bve[0], bve[1]);
-      // printf ("bve[0] %s bve[1] %s bvexp %s\n", btor_bv_to_char (g_mm,
-      // bve[0]), btor_bv_to_char (g_mm, bve[1]), btor_bv_to_char (g_mm,
-      // bvexp));
+      // printf ("bve[0] %s bve[1] %s bvexp %s\n",
+      //        btor_bv_to_char (g_mm, bve[0]),
+      //        btor_bv_to_char (g_mm, bve[1]),
+      //        btor_bv_to_char (g_mm, bvexp));
       /* -> first test local completeness  */
       for (k = 0; k < bw0; k++)
       {

@@ -50,7 +50,10 @@ bool btor_is_inv_udiv (BtorMemMgr *mm,
                        const BtorBitVector *t,
                        uint32_t pos_x);
 
-bool btor_is_inv_ult (BtorMemMgr *mm, const BtorBitVector *t, uint32_t pos_x);
+bool btor_is_inv_ult (BtorMemMgr *mm,
+                      const BtorBitVector *s,
+                      const BtorBitVector *t,
+                      uint32_t pos_x);
 
 bool btor_is_inv_urem (BtorMemMgr *mm,
                        const BtorBitVector *s,
