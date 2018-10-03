@@ -8,6 +8,7 @@
 
 #include "btorproputils.h"
 
+#include "btorinvutils.h"
 #include "btorprintmodel.h"
 #include "btorslsutils.h"
 #include "btorslvprop.h"
@@ -1608,9 +1609,12 @@ inv_add_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  /* invertibility condition: true */
-
-  /* res + s = s + res = t -> res = t - s */
+  /**
+   * invertibility condition: true
+   *
+   * res +   s = t   |->   res = t - s
+   * s   + res = t   |
+   */
   res = btor_bv_sub (btor->mm, t, s);
 #ifndef NDEBUG
   check_result_binary_dbg (btor, btor_bv_add, add, s, t, res, eidx, "+");
@@ -1636,12 +1640,14 @@ inv_and_bv (
   assert (!btor_node_is_bv_const (and->e[eidx]));
 
   uint32_t i;
-  int32_t bitand, bite;
+  int32_t bit_and, bit_e;
   BtorNode *e;
   BtorBitVector *res;
   BtorMemMgr *mm;
   BtorUIntStack dcbits;
   bool b;
+
+  mm = btor->mm;
 
   if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
@@ -1651,9 +1657,14 @@ inv_and_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  mm = btor->mm;
   e  = and->e[eidx ? 0 : 1];
   assert (e);
+
+  /* check invertibility, if not invertible: CONFLICT */
+  if (!btor_is_inv_and (mm, s, t))
+  {
+    return res_rec_conf (btor, and, e, t, s, eidx, cons_and_bv, "AND");
+  }
 
   b = btor_rng_pick_with_prob (
       &btor->rng, btor_opt_get (btor, BTOR_OPT_PROP_PROB_AND_FLIP));
@@ -1664,16 +1675,10 @@ inv_and_bv (
 
   for (i = 0; i < t->width; i++)
   {
-    bitand = btor_bv_get_bit (t, i);
-    bite   = btor_bv_get_bit (s, i);
+    bit_and = btor_bv_get_bit (t, i);
+    bit_e   = btor_bv_get_bit (s, i);
 
-    if (bitand&&!bite)
-    {
-      /* CONFLICT: all bits set in t, must be set in s ---------------------- */
-      btor_bv_free (mm, res);
-      res = res_rec_conf (btor, and, e, t, s, eidx, cons_and_bv, "AND");
-      goto DONE;
-    }
+    assert (!bit_and || bit_e);
 
     /* ----------------------------------------------------------------------
      * res & s = s & res = t
@@ -1682,9 +1687,9 @@ inv_and_bv (
      * -> all bits not set in t but set in s must not be set in res
      * -> all bits not set in s can be chosen to be set randomly
      * ---------------------------------------------------------------------- */
-    if (bitand)
+    if (bit_and)
       btor_bv_set_bit (res, i, 1);
-    else if (bite)
+    else if (bit_e)
       btor_bv_set_bit (res, i, 0);
     else if (b)
       BTOR_PUSH_STACK (dcbits, i);
@@ -1703,7 +1708,6 @@ inv_and_bv (
   check_result_binary_dbg (btor, btor_bv_and, and, s, t, res, eidx, "AND");
 #endif
 
-DONE:
   BTOR_RELEASE_STACK (dcbits);
   return res;
 }
