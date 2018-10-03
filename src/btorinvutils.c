@@ -125,9 +125,10 @@ btor_is_inv_sll (BtorMemMgr *mm,
     for (uint32_t i = 0; i < s->width && !res; i++)
     {
       BtorBitVector *bv_i    = btor_bv_uint64_to_bv (mm, i, s->width);
-      BtorBitVector *s_sll_i = btor_bv_srl (mm, s, bv_i);
+      BtorBitVector *s_sll_i = btor_bv_sll (mm, s, bv_i);
       BtorBitVector *eq_t    = btor_bv_eq (mm, s_sll_i, t);
       res                    = btor_bv_is_true (eq_t);
+
       btor_bv_free (mm, bv_i);
       btor_bv_free (mm, s_sll_i);
       btor_bv_free (mm, eq_t);
