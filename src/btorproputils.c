@@ -2033,13 +2033,12 @@ inv_srl_bv (
   assert (eidx || btor_util_log_2 (t->width) == s->width);
   assert (!btor_node_is_bv_const (srl->e[eidx]));
 
-  uint32_t i, j, clz_s, clz_t, shift, sbw;
+  uint32_t i, clz_s, clz_t, shift, sbw;
   BtorNode *e;
   BtorBitVector *res, *bvmax, *tmp;
   BtorMemMgr *mm;
-#ifndef NDEBUG
-  bool is_inv = true;
-#endif
+
+  mm = btor->mm;
 
   if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
@@ -2049,9 +2048,14 @@ inv_srl_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  mm = btor->mm;
   e  = srl->e[eidx ? 0 : 1];
   assert (e);
+
+  /* check invertibility, if not invertible: CONFLICT */
+  if (!btor_is_inv_srl (mm, s, t, eidx))
+  {
+    return res_rec_conf (btor, srl, e, t, s, eidx, cons_srl_bv, ">>");
+  }
 
   res = 0;
 
@@ -2083,49 +2087,32 @@ inv_srl_bv (
        * -------------------------------------------------------------------- */
       clz_s = btor_bv_get_num_leading_zeros (s);
       clz_t = btor_bv_get_num_leading_zeros (t);
-      if (clz_s <= clz_t)
+      assert (clz_s <= clz_t);
+      shift = clz_t - clz_s;
+      assert (shift <= t->width - 1);
+      if (btor_bv_is_zero (t))
       {
-        shift = clz_t - clz_s;
-
-        if (shift > t->width - 1)
-        {
-          /* CONFLICT: do not allow shift by bw ----------------------------- */
-          assert (btor_bv_is_zero (t));
-        BVSRL_CONF:
-          res = res_rec_conf (btor, srl, e, t, s, eidx, cons_srl_bv, ">>");
-#ifndef NDEBUG
-          is_inv = false;
-#endif
-        }
-        else if (btor_bv_is_zero (t))
-        {
-          /* x...x0 >> e[1] = 0...0
-           * -> choose random shift <= res < bw
-           * ---------------------------------------------------------------- */
-          bvmax = btor_bv_ones (mm, sbw);
-          tmp   = btor_bv_uint64_to_bv (mm, (uint64_t) shift, sbw);
-          res   = btor_bv_new_random_range (mm, &btor->rng, sbw, tmp, bvmax);
-          btor_bv_free (mm, bvmax);
-          btor_bv_free (mm, tmp);
-        }
-        else
-        {
-          for (i = 0, j = shift, res = 0; i < s->width - j; i++)
-          {
-            if (btor_bv_get_bit (s, s->width - 1 - i)
-                != btor_bv_get_bit (t, t->width - 1 - (j + i)))
-            {
-              /* CONFLICT: shifted bits must match -------------------------- */
-              goto BVSRL_CONF;
-            }
-          }
-
-          res = btor_bv_uint64_to_bv (mm, (uint64_t) shift, sbw);
-        }
+        /* x...x0 >> e[1] = 0...0
+         * -> choose random shift <= res < bw
+         * ---------------------------------------------------------------- */
+        bvmax = btor_bv_ones (mm, sbw);
+        tmp   = btor_bv_uint64_to_bv (mm, (uint64_t) shift, sbw);
+        res   = btor_bv_new_random_range (mm, &btor->rng, sbw, tmp, bvmax);
+        btor_bv_free (mm, bvmax);
+        btor_bv_free (mm, tmp);
       }
       else
       {
-        goto BVSRL_CONF;
+#ifndef NDEBUG
+        uint32_t j;
+        for (i = 0, j = shift, res = 0; i < s->width - j; i++)
+        {
+          /* CONFLICT: shifted bits must match */
+          assert (btor_bv_get_bit (s, s->width - 1 - i)
+                  == btor_bv_get_bit (t, t->width - 1 - (j + i)));
+        }
+#endif
+        res = btor_bv_uint64_to_bv (mm, (uint64_t) shift, sbw);
       }
     }
   }
@@ -2140,11 +2127,8 @@ inv_srl_bv (
     /* cast is no problem (max bit width handled by Boolector is INT32_MAX) */
     shift = (int32_t) btor_bv_to_uint64 (s);
 
-    if (btor_bv_get_num_leading_zeros (t) < shift)
-    {
-      /* CONFLICT: the MSBs shifted must be zero ---------------------------- */
-      goto BVSRL_CONF;
-    }
+    /* CONFLICT: the MSBs shifted must be zero */
+    assert (btor_bv_get_num_leading_zeros (t) >= shift);
 
     res = btor_bv_sll (mm, t, s);
     for (i = 0; i < shift; i++)
@@ -2152,8 +2136,7 @@ inv_srl_bv (
   }
 
 #ifndef NDEBUG
-  if (is_inv)
-    check_result_binary_dbg (btor, btor_bv_srl, srl, s, t, res, eidx, ">>");
+  check_result_binary_dbg (btor, btor_bv_srl, srl, s, t, res, eidx, ">>");
 #endif
   return res;
 }
