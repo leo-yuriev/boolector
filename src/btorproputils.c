@@ -1658,7 +1658,7 @@ inv_and_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  e  = and->e[eidx ? 0 : 1];
+  e = and->e[eidx ? 0 : 1];
   assert (e);
 
   /* check invertibility, if not invertible: CONFLICT */
@@ -1823,7 +1823,7 @@ inv_ult_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  e  = ult->e[eidx ? 0 : 1];
+  e = ult->e[eidx ? 0 : 1];
   assert (e);
 
   /* check invertibility, if not invertible: CONFLICT */
@@ -1918,7 +1918,7 @@ inv_sll_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  e  = sll->e[eidx ? 0 : 1];
+  e = sll->e[eidx ? 0 : 1];
   assert (e);
 
   /* check invertibility, if not invertible: CONFLICT */
@@ -2048,7 +2048,7 @@ inv_srl_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  e  = srl->e[eidx ? 0 : 1];
+  e = srl->e[eidx ? 0 : 1];
   assert (e);
 
   /* check invertibility, if not invertible: CONFLICT */
@@ -2177,7 +2177,7 @@ inv_mul_bv (
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  e  = mul->e[eidx ? 0 : 1];
+  e = mul->e[eidx ? 0 : 1];
   assert (e);
   bw = t->width;
 
