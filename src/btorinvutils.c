@@ -23,8 +23,12 @@
  * IC: t & s = t
  */
 bool
-btor_is_inv_and (BtorMemMgr *mm, const BtorBitVector *s, const BtorBitVector *t)
+btor_is_inv_and (BtorMemMgr *mm,
+                 const BtorBitVector *s,
+                 const BtorBitVector *t,
+                 uint32_t pos_x)
 {
+  (void) pos_x;
   BtorBitVector *t_and_s = btor_bv_and (mm, t, s);
   BtorBitVector *eq_t    = btor_bv_eq (mm, t_and_s, t);
   bool res               = btor_bv_is_true (eq_t);
@@ -67,8 +71,12 @@ btor_is_inv_concat (BtorMemMgr *mm,
  * IC: (-s | s ) & t = t
  */
 bool
-btor_is_inv_mul (BtorMemMgr *mm, const BtorBitVector *s, const BtorBitVector *t)
+btor_is_inv_mul (BtorMemMgr *mm,
+                 const BtorBitVector *s,
+                 const BtorBitVector *t,
+                 uint32_t pos_x)
 {
+  (void) pos_x;
   BtorBitVector *neg_s      = btor_bv_neg (mm, s);
   BtorBitVector *neg_s_or_s = btor_bv_or (mm, neg_s, s);
   BtorBitVector *and_t      = btor_bv_and (mm, neg_s_or_s, t);
@@ -86,8 +94,12 @@ btor_is_inv_mul (BtorMemMgr *mm, const BtorBitVector *s, const BtorBitVector *t)
  * IC: t | s = t
  */
 bool
-btor_is_inv_or (BtorMemMgr *mm, const BtorBitVector *s, const BtorBitVector *t)
+btor_is_inv_or (BtorMemMgr *mm,
+                const BtorBitVector *s,
+                const BtorBitVector *t,
+                uint32_t pos_x)
 {
+  (void) pos_x;
   BtorBitVector *t_or_s = btor_bv_or (mm, t, s);
   BtorBitVector *eq_t   = btor_bv_eq (mm, t_or_s, t);
   bool res              = btor_bv_is_true (eq_t);

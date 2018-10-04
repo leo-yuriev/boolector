@@ -15,7 +15,8 @@
 
 bool btor_is_inv_and (BtorMemMgr *mm,
                       const BtorBitVector *s,
-                      const BtorBitVector *t);
+                      const BtorBitVector *t,
+                      uint32_t pos_x);
 
 bool btor_is_inv_concat (BtorMemMgr *mm,
                          const BtorBitVector *s,
@@ -24,11 +25,13 @@ bool btor_is_inv_concat (BtorMemMgr *mm,
 
 bool btor_is_inv_mul (BtorMemMgr *mm,
                       const BtorBitVector *s,
-                      const BtorBitVector *t);
+                      const BtorBitVector *t,
+                      uint32_t pos_x);
 
 bool btor_is_inv_or (BtorMemMgr *mm,
                      const BtorBitVector *s,
-                     const BtorBitVector *t);
+                     const BtorBitVector *t,
+                     uint32_t pos_x);
 
 bool btor_is_inv_sll (BtorMemMgr *mm,
                       const BtorBitVector *s,
