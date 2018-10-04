@@ -1291,7 +1291,21 @@ btor_bv_sll (BtorMemMgr *mm, const BtorBitVector *a, const BtorBitVector *b)
   assert (a->width == b->width || btor_util_is_power_of_2 (a->width));
   assert (a->width == b->width || btor_util_log_2 (a->width) == b->width);
 
-  uint64_t shift;
+  uint64_t shift, len;
+  BtorBitVector *bvawidth, *bvshift;
+
+  bvawidth = btor_bv_uint64_to_bv (mm, a->width, a->width);
+  len      = a->width - b->width;
+  bvshift =
+      len ? btor_bv_uext (mm, b, a->width - b->width) : btor_bv_copy (mm, b);
+  if (btor_bv_compare (bvshift, bvawidth) >= 0)
+  {
+    btor_bv_free (mm, bvawidth);
+    btor_bv_free (mm, bvshift);
+    return btor_bv_new (mm, a->width);
+  }
+  btor_bv_free (mm, bvawidth);
+  btor_bv_free (mm, bvshift);
   shift = btor_bv_to_uint64 (b);
   return sll_bv (mm, a, shift);
 }
@@ -1332,16 +1346,27 @@ btor_bv_srl (BtorMemMgr *mm, const BtorBitVector *a, const BtorBitVector *b)
   assert (a->width == b->width || btor_util_log_2 (a->width) == b->width);
 
   uint32_t skip, i, j, k;
-  uint64_t shift;
-  BtorBitVector *res;
+  uint64_t shift, len;
+  BtorBitVector *res, *bvawidth, *bvshift;
   BTOR_BV_TYPE v;
 
-  res   = btor_bv_new (mm, a->width);
-  shift = btor_bv_to_uint64 (b);
-  if (shift >= a->width) return res;
+  res      = btor_bv_new (mm, a->width);
+  bvawidth = btor_bv_uint64_to_bv (mm, a->width, a->width);
+  len      = a->width - b->width;
+  bvshift =
+      len ? btor_bv_uext (mm, b, a->width - b->width) : btor_bv_copy (mm, b);
+  if (btor_bv_compare (bvshift, bvawidth) >= 0)
+  {
+    btor_bv_free (mm, bvawidth);
+    btor_bv_free (mm, bvshift);
+    return res;
+  }
+  btor_bv_free (mm, bvawidth);
+  btor_bv_free (mm, bvshift);
 
-  k    = shift % BTOR_BV_TYPE_BW;
-  skip = shift / BTOR_BV_TYPE_BW;
+  shift = btor_bv_to_uint64 (b);
+  k     = shift % BTOR_BV_TYPE_BW;
+  skip  = shift / BTOR_BV_TYPE_BW;
 
   v = 0;
   for (i = 0, j = skip; i < a->len && j < a->len; i++, j++)
