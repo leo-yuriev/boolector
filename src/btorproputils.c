@@ -2347,9 +2347,8 @@ inv_udiv_bv (Btor *btor,
   BtorBitVector *res, *lo, *up, *one, *bvmax, *tmp;
   BtorMemMgr *mm;
   BtorRNG *rng;
-#ifndef NDEBUG
-  bool is_inv = true;
-#endif
+
+  mm = btor->mm;
 
   if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
@@ -2359,11 +2358,16 @@ inv_udiv_bv (Btor *btor,
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  mm  = btor->mm;
   rng = &btor->rng;
   e   = udiv->e[eidx ? 0 : 1];
   assert (e);
   bw = s->width;
+
+  /* check invertibility, if not invertible: CONFLICT */
+  if (!btor_is_inv_udiv (mm, s, t, eidx))
+  {
+    return res_rec_conf (btor, udiv, e, t, s, eidx, cons_udiv_bv, "/");
+  }
 
   one   = btor_bv_one (mm, s->width);
   bvmax = btor_bv_ones (mm, t->width); /* 2^bw - 1 */
@@ -2408,30 +2412,20 @@ inv_udiv_bv (Btor *btor,
         /* t = 0 and s = 0 -> choose random e[1] > 0 ------------------------ */
         res = btor_bv_new_random_range (mm, rng, bw, one, bvmax);
       }
-      else if (btor_bv_compare (s, bvmax))
+      else
       {
+        assert (btor_bv_compare (s, bvmax)); /* CONFLICT: s = ~0  and t = 0 */
+
         /* t = 0 and 0 < s < 2^bw - 1 -> choose random e[1] > s ------------- */
         tmp = btor_bv_inc (mm, s);
         res = btor_bv_new_random_range (mm, rng, bw, tmp, bvmax);
         btor_bv_free (mm, tmp);
       }
-      else
-      {
-      BVUDIV_CONF:
-        /* CONFLICT --------------------------------------------------------- */
-        res = res_rec_conf (btor, udiv, e, t, s, eidx, cons_udiv_bv, "/");
-#ifndef NDEBUG
-        is_inv = false;
-#endif
-      }
-    }
-    else if (btor_bv_compare (s, t) < 0)
-    {
-      /* CONFLICT: s < t ---------------------------------------------------- */
-      goto BVUDIV_CONF;
     }
     else
     {
+      assert (btor_bv_compare (s, t) >= 0); /* CONFLICT: s < t */
+
       /* if t is a divisor of s, choose e[1] = s / t
        * with prob = 0.5 and a s s.t. s / e[1] = t otherwise
        * -------------------------------------------------------------------- */
@@ -2460,20 +2454,12 @@ inv_udiv_bv (Btor *btor,
         lo  = btor_bv_inc (mm, tmp); /* lower bound (incl.) */
         btor_bv_free (mm, tmp);
 
-        if (btor_bv_compare (lo, up) > 0)
-        {
-          /* CONFLICT: lo > up ---------------------------------------------- */
-          btor_bv_free (mm, lo);
-          btor_bv_free (mm, up);
-          goto BVUDIV_CONF;
-        }
-        else
-        {
-          /* choose lo <= e[1] <= up ---------------------------------------- */
-          res = btor_bv_new_random_range (mm, rng, bw, lo, up);
-          btor_bv_free (mm, lo);
-          btor_bv_free (mm, up);
-        }
+        assert (btor_bv_compare (lo, up) <= 0); /* CONFLICT: lo > up */
+
+        /* choose lo <= e[1] <= up ---------------------------------------- */
+        res = btor_bv_new_random_range (mm, rng, bw, lo, up);
+        btor_bv_free (mm, lo);
+        btor_bv_free (mm, up);
       }
     }
   }
@@ -2499,69 +2485,53 @@ inv_udiv_bv (Btor *btor,
         /* t = 2^bw-1 and s = 1 -> e[0] = 2^bw-1 ---------------------------- */
         res = btor_bv_copy (mm, bvmax);
       }
-      else if (btor_bv_is_zero (s))
+      else
       {
+        assert (btor_bv_is_zero (s)); /* CONFLICT: t = ~0 and s != 0 */
         /* t = 2^bw - 1 and s = 0 -> choose random e[0] --------------------- */
         res = btor_bv_new_random (mm, rng, bw);
       }
-      else
-      {
-        /* CONFLICT --------------------------------------------------------- */
-        goto BVUDIV_CONF;
-      }
-    }
-    else if (btor_bv_is_zero (s))
-    {
-      /* CONFLICT: s = 0 and t < 2^bw - 1 ----------------------------------- */
-      goto BVUDIV_CONF;
     }
     else
     {
       /* if s * t does not overflow, choose e[0] = s * t
        * with prob = 0.5 and a s s.t. e[0] / s = t otherwise */
 
-      if (btor_bv_is_umulo (mm, s, t))
-      {
-        /* CONFLICT: overflow: s * t ---------------------------------------- */
-        goto BVUDIV_CONF;
-      }
+      assert (!btor_bv_is_umulo (mm, s, t)); /* CONFLICT: overflow: s * t */
+      if (btor_rng_pick_with_prob (rng, 500))
+        res = btor_bv_mul (mm, s, t);
       else
       {
-        if (btor_rng_pick_with_prob (rng, 500))
-          res = btor_bv_mul (mm, s, t);
+        /* choose e[0] out of all options that yield
+         * e[0] / s = t
+         * Note: udiv always truncates the results towards 0.
+         * ---------------------------------------------------------------- */
+
+        /* determine upper and lower bounds for e[0]:
+         * up = s * (budiv + 1) - 1
+         *      if s * (t + 1) does not overflow
+         *      else 2^bw - 1
+         * lo = s * t */
+        lo  = btor_bv_mul (mm, s, t);
+        tmp = btor_bv_inc (mm, t);
+        if (btor_bv_is_umulo (mm, s, tmp))
+        {
+          btor_bv_free (mm, tmp);
+          up = btor_bv_copy (mm, bvmax);
+        }
         else
         {
-          /* choose e[0] out of all options that yield
-           * e[0] / s = t
-           * Note: udiv always truncates the results towards 0.
-           * ---------------------------------------------------------------- */
-
-          /* determine upper and lower bounds for e[0]:
-           * up = s * (budiv + 1) - 1
-           *      if s * (t + 1) does not overflow
-           *      else 2^bw - 1
-           * lo = s * t */
-          lo  = btor_bv_mul (mm, s, t);
-          tmp = btor_bv_inc (mm, t);
-          if (btor_bv_is_umulo (mm, s, tmp))
-          {
-            btor_bv_free (mm, tmp);
-            up = btor_bv_copy (mm, bvmax);
-          }
-          else
-          {
-            up = btor_bv_mul (mm, s, tmp);
-            btor_bv_free (mm, tmp);
-            tmp = btor_bv_dec (mm, up);
-            btor_bv_free (mm, up);
-            up = tmp;
-          }
-
-          res = btor_bv_new_random_range (mm, &btor->rng, s->width, lo, up);
-
+          up = btor_bv_mul (mm, s, tmp);
+          btor_bv_free (mm, tmp);
+          tmp = btor_bv_dec (mm, up);
           btor_bv_free (mm, up);
-          btor_bv_free (mm, lo);
+          up = tmp;
         }
+
+        res = btor_bv_new_random_range (mm, &btor->rng, s->width, lo, up);
+
+        btor_bv_free (mm, up);
+        btor_bv_free (mm, lo);
       }
     }
   }
@@ -2569,8 +2539,7 @@ inv_udiv_bv (Btor *btor,
   btor_bv_free (mm, bvmax);
   btor_bv_free (mm, one);
 #ifndef NDEBUG
-  if (is_inv)
-    check_result_binary_dbg (btor, btor_bv_udiv, udiv, s, t, res, eidx, "/");
+  check_result_binary_dbg (btor, btor_bv_udiv, udiv, s, t, res, eidx, "/");
 #endif
   return res;
 }
