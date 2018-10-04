@@ -1501,6 +1501,10 @@ res_rec_conf (Btor *btor,
           assert (BTOR_COUNT_STACK (slv->toprop) == 1);
           BTOR_POKE_STACK (slv->toprop, 0, prop);
         }
+        else
+        {
+          btor_bv_free (btor->mm, prop.bvexp);
+        }
         assert (prop_entailed == BTOR_PROP_ENTAILED_ALL
                 || BTOR_COUNT_STACK (slv->toprop) == 1);
       }
