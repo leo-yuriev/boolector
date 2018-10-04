@@ -1482,6 +1482,9 @@ clone_aux_btor (Btor *btor,
 
       allocated += sizeof (BtorPropSolver) + MEM_PTR_HASH_TABLE (cslv->roots)
                    + MEM_PTR_HASH_TABLE (cslv->score)
+#ifndef NDEBUG
+                   + BTOR_SIZE_STACK (cslv->prop_path) * sizeof (BtorPropInfo);
+#endif
                    + BTOR_SIZE_STACK (cslv->toprop) * sizeof (BtorPropInfo);
       for (i = 0; i < BTOR_COUNT_STACK (cslv->toprop); i++)
         allocated += MEM_BITVEC (BTOR_PEEK_STACK (cslv->toprop, i).bvexp);
