@@ -2868,9 +2868,8 @@ inv_concat_bv (Btor *btor,
   BtorNode *e;
   BtorBitVector *res, *tmp;
   BtorMemMgr *mm;
-#ifndef NDEBUG
-  bool is_inv = true;
-#endif
+
+  mm = btor->mm;
 
   if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
@@ -2880,9 +2879,14 @@ inv_concat_bv (Btor *btor,
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  mm = btor->mm;
   e  = concat->e[eidx ? 0 : 1];
   assert (e);
+
+  /* check invertibility, if not invertible: CONFLICT */
+  if (!btor_is_inv_concat (mm, s, t, eidx))
+  {
+    return res_rec_conf (btor, concat, e, t, s, eidx, cons_concat_bv, "o");
+  }
 
   res = 0;
 
@@ -2894,19 +2898,8 @@ inv_concat_bv (Btor *btor,
   if (eidx)
   {
     tmp = btor_bv_slice (mm, t, t->width - 1, t->width - s->width);
-    if (btor_bv_compare (tmp, s))
-    {
-    BVCONCAT_CONF:
-      /* CONFLICT: s bits do not match t ------------------------------------ */
-      res = res_rec_conf (btor, concat, e, t, s, eidx, cons_concat_bv, "o");
-#ifndef NDEBUG
-      is_inv = false;
-#endif
-    }
-    else
-    {
-      res = btor_bv_slice (mm, t, t->width - s->width - 1, 0);
-    }
+    assert (!btor_bv_compare (tmp, s)); /* CONFLICT: s bits do not match t */
+    res = btor_bv_slice (mm, t, t->width - s->width - 1, 0);
   }
   /* ------------------------------------------------------------------------
    * e[0] o s = t
@@ -2916,21 +2909,12 @@ inv_concat_bv (Btor *btor,
   else
   {
     tmp = btor_bv_slice (mm, t, s->width - 1, 0);
-    if (btor_bv_compare (tmp, s))
-    {
-      /* CONFLICT: s bits do not match t ------------------------------------ */
-      goto BVCONCAT_CONF;
-    }
-    else
-    {
-      res = btor_bv_slice (mm, t, t->width - 1, s->width);
-    }
+    assert (!btor_bv_compare (tmp, s)); /* CONFLICT: s bits do not match t */
+    res = btor_bv_slice (mm, t, t->width - 1, s->width);
   }
   btor_bv_free (mm, tmp);
 #ifndef NDEBUG
-  if (is_inv)
-    check_result_binary_dbg (
-        btor, btor_bv_concat, concat, s, t, res, eidx, "o");
+  check_result_binary_dbg (btor, btor_bv_concat, concat, s, t, res, eidx, "o");
 #endif
   return res;
 }

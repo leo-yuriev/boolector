@@ -52,7 +52,7 @@ btor_is_inv_concat (BtorMemMgr *mm,
   bool res;
   if (pos_x == 0)
   {
-    slice = btor_bv_slice (mm, t, s->width, 0);
+    slice = btor_bv_slice (mm, t, s->width - 1, 0);
   }
   else
   {
