@@ -2572,9 +2572,8 @@ inv_urem_bv (Btor *btor,
   BtorNode *e;
   BtorBitVector *res, *bvmax, *tmp, *tmp2, *one, *n, *mul, *up, *sub;
   BtorMemMgr *mm;
-#ifndef NDEBUG
-  bool is_inv = true;
-#endif
+
+  mm = btor->mm;
 
   if (btor->slv->kind == BTOR_PROP_SOLVER_KIND)
   {
@@ -2584,11 +2583,15 @@ inv_urem_bv (Btor *btor,
     BTOR_PROP_SOLVER (btor)->stats.props_inv += 1;
   }
 
-  mm = btor->mm;
   e  = urem->e[eidx ? 0 : 1];
   assert (e);
-
   bw = t->width;
+
+  /* check invertibility, if not invertible: CONFLICT */
+  if (!btor_is_inv_urem (mm, s, t, eidx))
+  {
+    return res_rec_conf (btor, urem, e, t, s, eidx, cons_urem_bv, "%");
+  }
 
   bvmax = btor_bv_ones (mm, bw); /* 2^bw - 1 */
   one   = btor_bv_one (mm, bw);
@@ -2608,20 +2611,11 @@ inv_urem_bv (Btor *btor,
   {
     if (!btor_bv_compare (t, bvmax))
     {
-      /* CONFLICT: t = 1...1 but s != 1...1 --------------------------------- */
-      if (btor_bv_compare (s, bvmax))
-      {
-      BVUREM_CONF:
-        res = res_rec_conf (btor, urem, e, t, s, eidx, cons_urem_bv, "%");
-#ifndef NDEBUG
-        is_inv = false;
-#endif
-      }
-      else
-      {
-        /* s % e[1] = 1...1 -> s = 1...1, e[1] = 0 -------------------------- */
-        res = btor_bv_new (mm, bw);
-      }
+      /* CONFLICT: t = ~0 but s != ~0 */
+      assert (!btor_bv_compare (s, bvmax));
+
+      /* s % e[1] = ~0 -> s = ~0, e[1] = 0 -------------------------- */
+      res = btor_bv_new (mm, bw);
     }
     else
     {
@@ -2642,123 +2636,108 @@ inv_urem_bv (Btor *btor,
           btor_bv_free (mm, tmp);
         }
       }
-      else if (cmp > 0)
+      else
       {
+        assert (cmp > 0); /* CONFLICT: s < t */
+
         /* s > t, e[1] = (s - t) / n ---------------------------------------- */
+#ifndef NDEBUG
         if (!btor_bv_is_zero (t))
         {
           tmp = btor_bv_dec (mm, s);
-          if (!btor_bv_compare (t, tmp))
-          {
-            /* CONFLICT:
-             * t = s - 1 -> s % e[1] = s - 1
-             * -> not possible if t > 0
-             * -------------------------------------------------------------- */
-            btor_bv_free (mm, tmp);
-            goto BVUREM_CONF;
-          }
+          /* CONFLICT: t = s - 1 -> s % e[1] = s - 1 > not possible if t > 0 */
+          assert (btor_bv_compare (t, tmp));
           btor_bv_free (mm, tmp);
         }
+#endif
 
         sub = btor_bv_sub (mm, s, t);
 
-        if (btor_bv_compare (sub, t) <= 0)
+        assert (btor_bv_compare (sub, t) > 0); /* CONFLICT: s - t <= t */
+
+        /* choose either n = 1 or 1 <= n < (s - t) / t
+         * with prob = 0.5
+         * ---------------------------------------------------------------- */
+
+        if (btor_rng_pick_with_prob (&btor->rng, 500))
         {
-          /* CONFLICT: s - t <= t ------------------------------------------- */
-          btor_bv_free (mm, sub);
-          goto BVUREM_CONF;
+          res = btor_bv_copy (mm, sub);
         }
         else
         {
-          /* choose either n = 1 or 1 <= n < (s - t) / t
-           * with prob = 0.5
-           * ---------------------------------------------------------------- */
+          /* 1 <= n < (s - t) / t (non-truncating)
+           * (note: div truncates towards 0!)
+           * -------------------------------------------------------------- */
 
-          if (btor_rng_pick_with_prob (&btor->rng, 500))
+          if (btor_bv_is_zero (t))
           {
-            res = btor_bv_copy (mm, sub);
+            /* t = 0 -> 1 <= n <= s --------------------------------------- */
+            up = btor_bv_copy (mm, s);
           }
           else
           {
-            /* 1 <= n < (s - t) / t (non-truncating)
-             * (note: div truncates towards 0!)
-             * -------------------------------------------------------------- */
-
-            if (btor_bv_is_zero (t))
+            /* e[1] > t
+             * -> (s - t) / n > t
+             * -> (s - t) / t > n
+             * ------------------------------------------------------------ */
+            tmp  = btor_bv_urem (mm, sub, t);
+            tmp2 = btor_bv_udiv (mm, sub, t);
+            if (btor_bv_is_zero (tmp))
             {
-              /* t = 0 -> 1 <= n <= s --------------------------------------- */
-              up = btor_bv_copy (mm, s);
+              /* (s - t) / t is not truncated
+               * (remainder is 0), therefore the EXclusive
+               * upper bound
+               * -> up = (s - t) / t - 1
+               * ---------------------------------------------------------- */
+              up = btor_bv_sub (mm, tmp2, one);
+              btor_bv_free (mm, tmp2);
             }
             else
             {
-              /* e[1] > t
-               * -> (s - t) / n > t
-               * -> (s - t) / t > n
-               * ------------------------------------------------------------ */
-              tmp  = btor_bv_urem (mm, sub, t);
-              tmp2 = btor_bv_udiv (mm, sub, t);
-              if (btor_bv_is_zero (tmp))
-              {
-                /* (s - t) / t is not truncated
-                 * (remainder is 0), therefore the EXclusive
-                 * upper bound
-                 * -> up = (s - t) / t - 1
-                 * ---------------------------------------------------------- */
-                up = btor_bv_sub (mm, tmp2, one);
-                btor_bv_free (mm, tmp2);
-              }
-              else
-              {
-                /* (s - t) / t is truncated
-                 * (remainder is not 0), therefore the INclusive
-                 * upper bound
-                 * -> up = (s - t) / t
-                 * ---------------------------------------------------------- */
-                up = tmp2;
-              }
-              btor_bv_free (mm, tmp);
+              /* (s - t) / t is truncated
+               * (remainder is not 0), therefore the INclusive
+               * upper bound
+               * -> up = (s - t) / t
+               * ---------------------------------------------------------- */
+              up = tmp2;
             }
+            btor_bv_free (mm, tmp);
+          }
 
-            if (btor_bv_is_zero (up))
-              res = btor_bv_udiv (mm, sub, one);
-            else
+          if (btor_bv_is_zero (up))
+            res = btor_bv_udiv (mm, sub, one);
+          else
+          {
+            /* choose 1 <= n <= up randomly
+             * s.t (s - t) % n = 0
+             * ------------------------------------------------------------ */
+            n   = btor_bv_new_random_range (mm, &btor->rng, bw, one, up);
+            tmp = btor_bv_urem (mm, sub, n);
+            for (cnt = 0; cnt < bw && !btor_bv_is_zero (tmp); cnt++)
             {
-              /* choose 1 <= n <= up randomly
-               * s.t (s - t) % n = 0
-               * ------------------------------------------------------------ */
-              n   = btor_bv_new_random_range (mm, &btor->rng, bw, one, up);
-              tmp = btor_bv_urem (mm, sub, n);
-              for (cnt = 0; cnt < bw && !btor_bv_is_zero (tmp); cnt++)
-              {
-                btor_bv_free (mm, n);
-                btor_bv_free (mm, tmp);
-                n   = btor_bv_new_random_range (mm, &btor->rng, bw, one, up);
-                tmp = btor_bv_urem (mm, sub, n);
-              }
-
-              if (btor_bv_is_zero (tmp))
-              {
-                /* res = (s - t) / n */
-                res = btor_bv_udiv (mm, sub, n);
-              }
-              else
-              {
-                /* fallback: n = 1 */
-                res = btor_bv_copy (mm, sub);
-              }
-
               btor_bv_free (mm, n);
               btor_bv_free (mm, tmp);
+              n   = btor_bv_new_random_range (mm, &btor->rng, bw, one, up);
+              tmp = btor_bv_urem (mm, sub, n);
             }
-            btor_bv_free (mm, up);
+
+            if (btor_bv_is_zero (tmp))
+            {
+              /* res = (s - t) / n */
+              res = btor_bv_udiv (mm, sub, n);
+            }
+            else
+            {
+              /* fallback: n = 1 */
+              res = btor_bv_copy (mm, sub);
+            }
+
+            btor_bv_free (mm, n);
+            btor_bv_free (mm, tmp);
           }
+          btor_bv_free (mm, up);
         }
         btor_bv_free (mm, sub);
-      }
-      else
-      {
-        /* CONFLICT: s < t -------------------------------------------------- */
-        goto BVUREM_CONF;
       }
     }
   }
@@ -2775,32 +2754,24 @@ inv_urem_bv (Btor *btor,
    * ------------------------------------------------------------------------ */
   else
   {
+    /* CONFLICT: t > 0 and s = 1 */
+    assert (btor_bv_is_zero (t) || !btor_bv_is_one (s));
+
     if (btor_bv_is_zero (s))
     {
-    BVUREM_ZERO_0:
       /* s = 0 -> e[0] = t -------------------------------------------------- */
       res = btor_bv_copy (mm, t);
     }
-    else if (!btor_bv_is_zero (t) && btor_bv_is_one (s))
-    {
-      /* CONFLICT: t > 0 and s = 1 ------------------------------------------ */
-      goto BVUREM_CONF;
-    }
     else if (!btor_bv_compare (t, bvmax))
     {
-      if (!btor_bv_is_zero (s))
-      {
-        /* CONFLICT: s != 0 ------------------------------------------------- */
-        goto BVUREM_CONF;
-      }
-      else
-      {
-        /* t = 1...1 -> s = 0, e[0] = 1...1 --------------------------------- */
-        goto BVUREM_ZERO_0;
-      }
+      assert (btor_bv_is_zero (s)); /* CONFLICT: s != 0 */
+      /* t = 1...1 -> s = 0, e[0] = 1...1 ----------------------------------- */
+      res = btor_bv_copy (mm, t);
     }
-    else if (btor_bv_compare (s, t) > 0)
+    else
     {
+      assert (btor_bv_compare (s, t) > 0); /* CONFLICT: s <= t */
+
       if (btor_rng_pick_with_prob (&btor->rng, 500))
       {
       BVUREM_EQ_0:
@@ -2861,19 +2832,13 @@ inv_urem_bv (Btor *btor,
         }
       }
     }
-    else
-    {
-      /* CONFLICT: s <= t -------------------------------------------- */
-      goto BVUREM_CONF;
-    }
   }
 
   btor_bv_free (mm, one);
   btor_bv_free (mm, bvmax);
 
 #ifndef NDEBUG
-  if (is_inv)
-    check_result_binary_dbg (btor, btor_bv_urem, urem, s, t, res, eidx, "%");
+  check_result_binary_dbg (btor, btor_bv_urem, urem, s, t, res, eidx, "%");
 #endif
   return res;
 }
