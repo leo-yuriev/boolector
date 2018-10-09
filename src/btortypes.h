@@ -620,6 +620,14 @@ enum BtorOption
   BTOR_OPT_PROP_ENTAILED,
 
   /*!
+    * **BTOR_OPT_PROP_CONST_BITS**
+
+      Enable (``value``: 1) or disable (``value``: 0) constant bit propagation
+      (requires bit-blasting to AIG).
+    */
+  BTOR_OPT_PROP_CONST_BITS,
+
+  /*!
     * **BTOR_OPT_PROP_USE_RESTARTS**
 
       Enable (``value``: 1) or disable (``value``: 0) restarts.

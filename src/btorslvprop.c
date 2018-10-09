@@ -13,13 +13,13 @@
 #include "btorclone.h"
 #include "btorcore.h"
 #include "btordbg.h"
-#include "btorlsutils.h"
 #include "btorlog.h"
+#include "btorlsutils.h"
 #include "btormodel.h"
 #include "btornode.h"
 #include "btoropt.h"
-#include "btorproputils.h"
 #include "btorprintmodel.h"
+#include "btorproputils.h"
 #include "btorslsutils.h"
 
 #include "utils/btorhashint.h"
@@ -53,9 +53,21 @@ select_constraint (Btor *btor, uint32_t nmoves)
   assert (slv->roots->count);
 
 #ifndef NDEBUG
+  BtorPtrHashTable *constraints;
   BtorPtrHashTableIterator pit;
   BtorNode *root;
-  btor_iter_hashptr_init (&pit, btor->unsynthesized_constraints);
+  if (btor_opt_get (btor, BTOR_OPT_PROP_CONST_BITS))
+  {
+    assert (btor->unsynthesized_constraints->count == 0);
+    constraints = btor->synthesized_constraints;
+  }
+  else
+  {
+    assert (btor->synthesized_constraints->count == 0);
+    constraints = btor->unsynthesized_constraints;
+  }
+
+  btor_iter_hashptr_init (&pit, constraints);
   btor_iter_hashptr_queue (&pit, btor->assumptions);
   while (btor_iter_hashptr_has_next (&pit))
   {
@@ -321,6 +333,7 @@ sat_prop_solver_aux (Btor *btor)
   int32_t sat_result;
   uint32_t nprops;
   BtorNode *root;
+  BtorPtrHashTable *constraints;
   BtorPtrHashTableIterator it;
   BtorPropSolver *slv;
 
@@ -328,13 +341,25 @@ sat_prop_solver_aux (Btor *btor)
   assert (slv);
   nprops = btor_opt_get (btor, BTOR_OPT_PROP_NPROPS);
 
+  if (btor_opt_get (btor, BTOR_OPT_PROP_CONST_BITS))
+  {
+    btor_process_unsynthesized_constraints (btor);
+    if (btor->found_constraint_false) goto UNSAT;
+    assert (btor->unsynthesized_constraints->count == 0);
+    constraints = btor->synthesized_constraints;
+  }
+  else
+  {
+    assert (btor->synthesized_constraints->count == 0);
+    constraints = btor->unsynthesized_constraints;
+  }
+
   /* check for constraints occurring in both phases */
   btor_iter_hashptr_init (&it, btor->assumptions);
   while (btor_iter_hashptr_has_next (&it))
   {
     root = btor_iter_hashptr_next (&it);
-    if (btor_hashptr_table_get (btor->unsynthesized_constraints,
-                                btor_node_invert (root)))
+    if (btor_hashptr_table_get (constraints, btor_node_invert (root)))
       goto UNSAT;
     if (btor_hashptr_table_get (btor->assumptions, btor_node_invert (root)))
       goto UNSAT;
@@ -347,8 +372,11 @@ sat_prop_solver_aux (Btor *btor)
     /* collect unsatisfied roots (kept up-to-date in update_cone) */
     assert (!slv->roots);
     slv->roots = btor_hashint_map_new (btor->mm);
-    assert (btor->synthesized_constraints->count == 0);
-    btor_iter_hashptr_init (&it, btor->unsynthesized_constraints);
+    assert ((btor_opt_get (btor, BTOR_OPT_PROP_CONST_BITS)
+             && btor->unsynthesized_constraints->count == 0)
+            || (!btor_opt_get (btor, BTOR_OPT_PROP_CONST_BITS)
+                && btor->synthesized_constraints->count == 0));
+    btor_iter_hashptr_init (&it, constraints);
     btor_iter_hashptr_queue (&it, btor->assumptions);
     while (btor_iter_hashptr_has_next (&it))
     {
@@ -504,7 +532,7 @@ print_stats_prop_solver (BtorPropSolver *slv)
   assert (slv->btor);
   assert (slv->btor->slv == (BtorSolver *) slv);
 
-  Btor *btor = slv->btor;
+  Btor *btor           = slv->btor;
   bool enable_entailed = btor_opt_get (slv->btor, BTOR_OPT_PROP_ENTAILED);
 
   BTOR_MSG (btor->msg, 1, "");

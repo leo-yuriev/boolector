@@ -43,6 +43,7 @@ static BtorRNG *g_rng;
     btor_opt_set (g_btor, BTOR_OPT_PROP_PROB_SLICE_FLIP, 0);       \
     btor_opt_set (g_btor, BTOR_OPT_PROP_PROB_EQ_FLIP, 0);          \
     btor_opt_set (g_btor, BTOR_OPT_PROP_PROB_AND_FLIP, 0);         \
+    /*btor_opt_set (g_btor, BTOR_OPT_PROP_CONST_BITS, 1);*/        \
     /*btor_opt_set (g_btor, BTOR_OPT_LOGLEVEL, 2);*/               \
     g_mm  = g_btor->mm;                                            \
     g_rng = &g_btor->rng;                                          \
