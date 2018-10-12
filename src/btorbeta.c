@@ -737,6 +737,36 @@ beta_reduce_partial_aux (Btor *btor,
           btor_node_release (btor, e[1]);
           break;
         case BTOR_BV_UREM_NODE:
+          result = btor_exp_bv_urem (btor, e[1], e[0]);
+          btor_node_release (btor, e[0]);
+          btor_node_release (btor, e[1]);
+          break;
+        case BTOR_BV_CONCAT_NODE:
+          result = btor_exp_bv_concat (btor, e[1], e[0]);
+          btor_node_release (btor, e[0]);
+          btor_node_release (btor, e[1]);
+          break;
+        case BTOR_ARGS_NODE:
+          assert (real_cur->arity >= 1);
+          assert (real_cur->arity <= 3);
+          if (real_cur->arity == 2)
+          {
+            next = e[0];
+            e[0] = e[1];
+            e[1] = next;
+          }
+          else if (real_cur->arity == 3)
+          {
+            next = e[0];
+            e[0] = e[2];
+            e[2] = next;
+          }
+          result = btor_exp_args (btor, e, real_cur->arity);
+          btor_node_release (btor, e[0]);
+          if (real_cur->arity >= 2) btor_node_release (btor, e[1]);
+          if (real_cur->arity >= 3) btor_node_release (btor, e[2]);
+          break;
+        case BTOR_APPLY_NODE:
           if (btor_node_is_fun (e[1]))
           {
             result = btor_node_create_apply (btor, e[1], e[0]);
