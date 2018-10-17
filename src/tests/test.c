@@ -14,6 +14,7 @@
 #include "testarithmetic.h"
 #include "testboolectornodemap.h"
 #include "testbv.h"
+#include "testbvprop.h"
 #include "testcbits.h"
 #include "testcomp.h"
 #include "testexp.h"
@@ -74,7 +75,7 @@
   "  patterns:\n"                                                            \
   "    a valid pattern is a substring of an existing test case out of the\n" \
   "    following test case sets:\n"                                          \
-  "      aig, aigvec, arithmetic, bitvec, comp, exp, hash, inc,"             \
+  "      aig, aigvec, arithmetic, bitvec, bvprop, comp, exp, hash, inc,"     \
   "      int_hash_map, int_hash_table, lambda, logic, map, mc, mem,\n"       \
   "      misc, modelgen, modelgensmt2, overflow, parseerror, prop,\n"        \
   "      propinv, queue, sat, shift, smtaxioms, sort, special, stack,\n"     \
@@ -128,6 +129,7 @@ main (int32_t argc, char **argv)
   BTOR_RUN_TESTS (queue);
   BTOR_RUN_TESTS (hash);
   BTOR_RUN_TESTS (bitvec);
+  BTOR_RUN_TESTS (bvprop);
   BTOR_RUN_TESTS (prop);
   BTOR_RUN_TESTS (propinv);
   BTOR_RUN_TESTS (sat);
