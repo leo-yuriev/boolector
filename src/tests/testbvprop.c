@@ -21,12 +21,122 @@
 
 static BtorMemMgr *g_mm;
 
+#define TEST_BW 3
+#define TEST_NUM_CONSTS 27
+#define TEST_CONST_LEN (TEST_BW + 1)
+char g_consts[TEST_NUM_CONSTS][TEST_CONST_LEN] = {0};
+
 /*------------------------------------------------------------------------*/
 
 void
 init_bvprop_tests (void)
 {
   g_mm = btor_mem_mgr_new ();
+
+  /* Initialize all possible values for 3-valued constants of bit-width
+   * TEST_BW. */
+  char bit     = '0';
+  size_t psize = TEST_NUM_CONSTS;
+  for (size_t i = 0; i < TEST_BW; i++)
+  {
+    psize = psize / 3;
+    for (size_t j = 0; j < TEST_NUM_CONSTS; j++)
+    {
+      g_consts[j][i] = bit;
+      if ((j + 1) % psize == 0)
+      {
+        bit = bit == '0' ? '1' : (bit == '1' ? 'x' : '0');
+      }
+    }
+  }
+}
+
+/* Create 2-valued bit-vector from 3-valued bit-vector 'bv' by initializing
+ * 'x' values to 'bit'. */
+static BtorBitVector *
+to_bv (const char *c, char bit)
+{
+  size_t len = strlen (c);
+  char buf[len + 1];
+  buf[len] = '\0';
+  for (size_t i = 0; i < len; i++)
+  {
+    buf[i] = (c[i] == 'x') ? bit : c[i];
+  }
+  return btor_bv_char_to_bv (g_mm, buf);
+}
+
+/* Create hi for domain from 3-valued bit-vector 'bv'. */
+static BtorBitVector *
+to_hi (const char *bv)
+{
+  return to_bv (bv, '1');
+}
+
+/* Create lo for domain from 3-valued bit-vector 'bv'. */
+static BtorBitVector *
+to_lo (const char *bv)
+{
+  return to_bv (bv, '0');
+}
+
+/* Create domain from 3-valued bit-vector 'bv'. */
+static BtorBvDomain *
+create_domain (const char *bv)
+{
+  BtorBitVector *lo = to_lo (bv);
+  BtorBitVector *hi = to_hi (bv);
+  BtorBvDomain *res = btor_bvprop_new (g_mm, lo, hi);
+  btor_bv_free (g_mm, lo);
+  btor_bv_free (g_mm, hi);
+  return res;
+}
+
+/* Create 3-valued bit-vector from domain 'd'. */
+static char *
+from_domain (BtorMemMgr *mm, BtorBvDomain *d)
+{
+  assert (btor_bvprop_is_valid (mm, d));
+  char *lo = btor_bv_to_char (mm, d->lo);
+  char *hi = btor_bv_to_char (mm, d->hi);
+
+  size_t len = strlen (lo);
+  for (size_t i = 0; i < len; i++)
+  {
+    if (lo[i] != hi[i])
+    {
+      /* lo[i] == '1' && hi[i] == '0' would be an invalid domain. */
+      assert (lo[i] == '0');
+      assert (hi[i] == '1');
+      lo[i] = 'x';
+    }
+  }
+  btor_mem_freestr (mm, hi);
+  return lo;
+}
+
+static bool
+check_const_bits (BtorBvDomain *d, const char *expected)
+{
+  assert (btor_bvprop_is_valid (g_mm, d));
+  size_t len = strlen (expected);
+  uint32_t bit_lo, bit_hi;
+  bool res = true;
+
+  for (size_t i = 0; i < len && res; i++)
+  {
+    bit_lo = btor_bv_get_bit (d->lo, len - 1 - i);
+    bit_hi = btor_bv_get_bit (d->hi, len - 1 - i);
+    if (expected[i] == 'x')
+    {
+      res &= bit_lo != bit_hi;
+    }
+    else
+    {
+      res &= bit_lo == bit_hi;
+    }
+  }
+  return res;
 }
 
 /*------------------------------------------------------------------------*/
@@ -94,6 +204,48 @@ test_new_init_domain_bvprop ()
   btor_bvprop_free (g_mm, d);
 }
 
+void
+test_eq_bvprop ()
+{
+  char *str_z;
+  BtorBvDomain *d_x, *d_y, *res_xy, *res_z;
+
+  for (size_t i = 0; i < TEST_NUM_CONSTS; i++)
+  {
+    d_x = create_domain (g_consts[i]);
+    for (size_t j = 0; j < TEST_NUM_CONSTS; j++)
+    {
+      d_y = create_domain (g_consts[j]);
+      btor_bvprop_eq (g_mm, d_x, d_y, &res_xy, &res_z);
+      if (btor_bvprop_is_fixed (g_mm, res_z))
+      {
+        str_z = from_domain (g_mm, res_z);
+        assert (strlen (str_z) == 1);
+        assert (str_z[0] == '0' || str_z[0] == '1');
+        if (str_z[0] == '0')
+        {
+          assert (!btor_bvprop_is_valid (g_mm, res_xy));
+        }
+        else
+        {
+          assert (str_z[0] == '1');
+          assert (btor_bvprop_is_valid (g_mm, res_xy));
+          assert (btor_bvprop_is_fixed (g_mm, res_xy));
+        }
+        btor_mem_freestr (g_mm, str_z);
+      }
+      else
+      {
+        assert (btor_bvprop_is_valid (g_mm, res_xy));
+      }
+      btor_bvprop_free (g_mm, d_y);
+      btor_bvprop_free (g_mm, res_xy);
+      btor_bvprop_free (g_mm, res_z);
+    }
+    btor_bvprop_free (g_mm, d_x);
+  }
+}
+
 /*------------------------------------------------------------------------*/
 
 void
@@ -102,6 +254,7 @@ run_bvprop_tests (int32_t argc, char **argv)
   BTOR_RUN_TEST (valid_domain_bvprop);
   BTOR_RUN_TEST (fixed_domain_bvprop);
   BTOR_RUN_TEST (new_init_domain_bvprop);
+  BTOR_RUN_TEST (eq_bvprop);
 }
 
 void
