@@ -118,3 +118,31 @@ btor_bvprop_eq (BtorMemMgr *mm,
   }
   assert (btor_bvprop_is_valid (mm, *res_d_z));
 }
+
+void
+btor_bvprop_not (BtorMemMgr *mm,
+                 BtorBvDomain *d_x,
+                 BtorBvDomain *d_z,
+                 BtorBvDomain **res_d_x,
+                 BtorBvDomain **res_d_z)
+{
+  assert (mm);
+  assert (d_x);
+  assert (d_z);
+
+  BtorBitVector *not_hi = btor_bv_not (mm, d_z->hi);
+  BtorBitVector *not_lo = btor_bv_not (mm, d_z->lo);
+  *res_d_x              = new_domain (mm);
+  (*res_d_x)->lo        = btor_bv_or (mm, d_x->lo, not_hi);
+  (*res_d_x)->hi        = btor_bv_and (mm, d_x->hi, not_lo);
+  btor_bv_free (mm, not_hi);
+  btor_bv_free (mm, not_lo);
+
+  not_hi         = btor_bv_not (mm, d_x->hi);
+  not_lo         = btor_bv_not (mm, d_x->lo);
+  *res_d_z       = new_domain (mm);
+  (*res_d_z)->lo = btor_bv_or (mm, d_z->lo, not_hi);
+  (*res_d_z)->hi = btor_bv_and (mm, d_z->hi, not_lo);
+  btor_bv_free (mm, not_hi);
+  btor_bv_free (mm, not_lo);
+}

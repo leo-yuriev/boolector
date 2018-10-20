@@ -116,6 +116,73 @@ from_domain (BtorMemMgr *mm, BtorBvDomain *d)
 }
 
 static bool
+is_false_eq (const char *a, const char *b)
+{
+  assert (strlen (a) == strlen (b));
+  size_t len = strlen (a);
+  for (size_t i = 0; i < len; i++)
+  {
+    if (a[i] == 'x' || b[i] == 'x')
+    {
+      continue;
+    }
+    if (a[i] != b[i])
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool
+is_true_eq (const char *a, const char *b)
+{
+  assert (strlen (a) == strlen (b));
+  size_t len = strlen (a);
+  for (size_t i = 0; i < len; i++)
+  {
+    if (a[i] == 'x' && b[i] == 'x')
+    {
+      return false;
+    }
+    if (a[i] != 'x' && b[i] != 'x')
+    {
+      if (a[i] != b[i])
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static bool
+check_not (BtorBvDomain *d_x, BtorBvDomain *d_z)
+{
+  bool res    = true;
+  char *str_x = from_domain (g_mm, d_x);
+  char *str_z = from_domain (g_mm, d_z);
+  assert (strlen (str_x) == strlen (str_z));
+
+  size_t len = strlen (str_x);
+  for (size_t i = 0; i < len; i++)
+  {
+    if (((str_x[i] == 'x') != (str_z[i] == 'x'))
+        || (str_x[i] == '0' && str_z[i] != '1')
+        || (str_x[i] == '1' && str_z[i] != '0')
+        || (str_z[i] == '0' && str_x[i] != '1')
+        || (str_z[i] == '1' && str_x[i] != '0'))
+    {
+      res = false;
+      break;
+    }
+  }
+  btor_mem_freestr (g_mm, str_x);
+  btor_mem_freestr (g_mm, str_z);
+  return res;
+}
+
+static bool
 check_const_bits (BtorBvDomain *d, const char *expected)
 {
   assert (btor_bvprop_is_valid (g_mm, d));
@@ -225,18 +292,22 @@ test_eq_bvprop ()
         if (str_z[0] == '0')
         {
           assert (!btor_bvprop_is_valid (g_mm, res_xy));
+          assert (is_false_eq (g_consts[i], g_consts[j]));
         }
         else
         {
           assert (str_z[0] == '1');
           assert (btor_bvprop_is_valid (g_mm, res_xy));
           assert (btor_bvprop_is_fixed (g_mm, res_xy));
+          assert (is_true_eq (g_consts[i], g_consts[j]));
         }
         btor_mem_freestr (g_mm, str_z);
       }
       else
       {
         assert (btor_bvprop_is_valid (g_mm, res_xy));
+        assert (!is_false_eq (g_consts[i], g_consts[j]));
+        assert (!is_true_eq (g_consts[i], g_consts[j]));
       }
       btor_bvprop_free (g_mm, d_y);
       btor_bvprop_free (g_mm, res_xy);
@@ -244,6 +315,52 @@ test_eq_bvprop ()
     }
     btor_bvprop_free (g_mm, d_x);
   }
+}
+
+void
+test_not_bvprop ()
+{
+  BtorBvDomain *d_x, *d_z, *res_x, *res_z;
+
+  d_z = btor_bvprop_new_init (g_mm, TEST_BW);
+  for (size_t i = 0; i < TEST_NUM_CONSTS; i++)
+  {
+    d_x = create_domain (g_consts[i]);
+    btor_bvprop_not (g_mm, d_x, d_z, &res_x, &res_z);
+
+    assert (btor_bvprop_is_valid (g_mm, res_x));
+    assert (btor_bvprop_is_valid (g_mm, res_z));
+    assert (btor_bvprop_is_fixed (g_mm, d_x)
+            == btor_bvprop_is_fixed (g_mm, res_x));
+    assert (btor_bvprop_is_fixed (g_mm, d_x)
+            == btor_bvprop_is_fixed (g_mm, res_z));
+    assert (check_not (res_x, res_z));
+
+    btor_bvprop_free (g_mm, d_x);
+    btor_bvprop_free (g_mm, res_x);
+    btor_bvprop_free (g_mm, res_z);
+  }
+  btor_bvprop_free (g_mm, d_z);
+
+  d_x = btor_bvprop_new_init (g_mm, TEST_BW);
+  for (size_t i = 0; i < TEST_NUM_CONSTS; i++)
+  {
+    d_z = create_domain (g_consts[i]);
+    btor_bvprop_not (g_mm, d_x, d_z, &res_x, &res_z);
+
+    assert (btor_bvprop_is_valid (g_mm, res_x));
+    assert (btor_bvprop_is_valid (g_mm, res_z));
+    assert (btor_bvprop_is_fixed (g_mm, d_z)
+            == btor_bvprop_is_fixed (g_mm, res_x));
+    assert (btor_bvprop_is_fixed (g_mm, d_z)
+            == btor_bvprop_is_fixed (g_mm, res_z));
+    assert (check_not (res_x, res_z));
+
+    btor_bvprop_free (g_mm, d_z);
+    btor_bvprop_free (g_mm, res_x);
+    btor_bvprop_free (g_mm, res_z);
+  }
+  btor_bvprop_free (g_mm, d_x);
 }
 
 /*------------------------------------------------------------------------*/
@@ -255,6 +372,7 @@ run_bvprop_tests (int32_t argc, char **argv)
   BTOR_RUN_TEST (fixed_domain_bvprop);
   BTOR_RUN_TEST (new_init_domain_bvprop);
   BTOR_RUN_TEST (eq_bvprop);
+  BTOR_RUN_TEST (not_bvprop);
 }
 
 void

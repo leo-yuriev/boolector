@@ -48,11 +48,16 @@ void btor_bvprop_eq (BtorMemMgr *mm,
                      BtorBvDomain **res_d_xy,
                      BtorBvDomain **res_d_z);
 
+/* Propagate domains 'd_x' and 'd_z' of z = ~x. */
+void btor_bvprop_not (BtorMemMgr *mm,
+                      BtorBvDomain *d_x,
+                      BtorBvDomain *d_z,
+                      BtorBvDomain **res_d_x,
+                      BtorBvDomain **res_d_z);
+
 // TODO:
 // propagators:
 //
-// y = x
-// y = ~x
 // z = x & y
 // y = x << n
 // y = x >> n
