@@ -1,6 +1,7 @@
 /*  Boolector: Satisfiability Modulo Theories (SMT) solver.
  *
  *  Copyright (C) 2018 Mathias Preiner.
+ *  Copyright (C) 2018 Aina Niemetz.
  *
  *  This file is part of Boolector.
  *  See COPYING for more information on using this software.
@@ -206,6 +207,23 @@ check_const_bits (BtorBvDomain *d, const char *expected)
   return res;
 }
 
+static void
+check_sll_const (BtorBvDomain *d_x, BtorBvDomain *d_z, uint32_t n)
+{
+  char *str_x = from_domain (g_mm, d_x);
+  char *str_z = from_domain (g_mm, d_z);
+  assert (strlen (str_x) == strlen (str_z));
+
+  size_t len = strlen (str_x);
+  for (size_t i = 0; i < len; i++)
+  {
+    assert (i >= n || str_z[len - 1 - i] == '0');
+    assert (i < n || str_z[len - 1 - i] == str_x[len - 1 - i + n]);
+  }
+  btor_mem_freestr (g_mm, str_x);
+  btor_mem_freestr (g_mm, str_z);
+}
+
 /*------------------------------------------------------------------------*/
 
 void
@@ -363,6 +381,58 @@ test_not_bvprop ()
   btor_bvprop_free (g_mm, d_x);
 }
 
+void
+test_sll_const_bvprop ()
+{
+  size_t i;
+  uint32_t n;
+  BtorBitVector *bv_n;
+  BtorBvDomain *d_x, *d_z, *res_x, *res_z;
+
+  d_z = btor_bvprop_new_init (g_mm, TEST_BW);
+  for (i = 0; i < TEST_NUM_CONSTS; i++)
+  {
+    d_x = create_domain (g_consts[i]);
+    for (n = 0; n < TEST_BW + 1; n++)
+    {
+      bv_n = btor_bv_uint64_to_bv(g_mm, n, TEST_BW);
+      btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+      assert (btor_bvprop_is_valid (g_mm, res_x));
+      assert (btor_bvprop_is_valid (g_mm, res_z));
+      assert (btor_bvprop_is_fixed (g_mm, d_x)
+              == btor_bvprop_is_fixed (g_mm, res_x));
+      check_sll_const (res_x, res_z, n);
+
+      btor_bvprop_free (g_mm, res_x);
+      btor_bvprop_free (g_mm, res_z);
+      btor_bv_free (g_mm, bv_n);
+    }
+    btor_bvprop_free (g_mm, d_x);
+  }
+  btor_bvprop_free (g_mm, d_z);
+
+  d_z = btor_bvprop_new_init (g_mm, TEST_BW);
+  for (i = 0; i < TEST_NUM_CONSTS; i++)
+  {
+    d_x = create_domain (g_consts[i]);
+    for (n = 0; n < TEST_BW + 1; n++)
+    {
+      bv_n = btor_bv_uint64_to_bv(g_mm, n, TEST_BW);
+      btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+      assert (btor_bvprop_is_valid (g_mm, res_x));
+      assert (btor_bvprop_is_valid (g_mm, res_z));
+      assert (btor_bvprop_is_fixed (g_mm, d_x)
+              == btor_bvprop_is_fixed (g_mm, res_x));
+      check_sll_const (res_x, res_z, n);
+
+      btor_bvprop_free (g_mm, res_x);
+      btor_bvprop_free (g_mm, res_z);
+      btor_bv_free (g_mm, bv_n);
+    }
+    btor_bvprop_free (g_mm, d_x);
+  }
+  btor_bvprop_free (g_mm, d_z);
+}
 /*------------------------------------------------------------------------*/
 
 void
@@ -373,6 +443,7 @@ run_bvprop_tests (int32_t argc, char **argv)
   BTOR_RUN_TEST (new_init_domain_bvprop);
   BTOR_RUN_TEST (eq_bvprop);
   BTOR_RUN_TEST (not_bvprop);
+  BTOR_RUN_TEST (sll_const_bvprop);
 }
 
 void
