@@ -92,6 +92,9 @@ btor_bvprop_eq (BtorMemMgr *mm,
   assert (d_x);
   assert (d_y);
 
+  /* lo_xy = lo_x | lo_y
+   * hi_xy = hi_x & hi_y
+   */
   *res_d_xy       = new_domain (mm);
   (*res_d_xy)->lo = btor_bv_or (mm, d_x->lo, d_y->lo);
   (*res_d_xy)->hi = btor_bv_and (mm, d_x->hi, d_y->hi);
@@ -111,7 +114,8 @@ btor_bvprop_eq (BtorMemMgr *mm,
       *res_d_z = btor_bvprop_new_init (mm, 1);
     }
   }
-  else /* Domain is invalid: equality is false. */
+  /* Domain is invalid: equality is false. */
+  else
   {
     *res_d_z       = new_domain (mm);
     (*res_d_z)->lo = btor_bv_zero (mm, 1);
@@ -131,6 +135,9 @@ btor_bvprop_not (BtorMemMgr *mm,
   assert (d_x);
   assert (d_z);
 
+  /* lo_x' = lo_x | ~hi_z
+   * hi_x' = hi_x & ~hi_z
+   */
   BtorBitVector *not_hi = btor_bv_not (mm, d_z->hi);
   BtorBitVector *not_lo = btor_bv_not (mm, d_z->lo);
   *res_d_x              = new_domain (mm);
@@ -139,6 +146,9 @@ btor_bvprop_not (BtorMemMgr *mm,
   btor_bv_free (mm, not_hi);
   btor_bv_free (mm, not_lo);
 
+  /* lo_z' = lo_z | ~hi_x
+   * hi_z' = hi_z & ~hi_x
+   */
   not_hi         = btor_bv_not (mm, d_x->hi);
   not_lo         = btor_bv_not (mm, d_x->lo);
   *res_d_z       = new_domain (mm);
@@ -278,4 +288,62 @@ btor_bvprop_srl_const (BtorMemMgr *mm,
                        BtorBvDomain **res_d_z)
 {
   bvprop_shift_const_aux (mm, d_x, d_z, n, res_d_x, res_d_z, true);
+}
+
+void
+btor_bvprop_and (BtorMemMgr *mm,
+                 BtorBvDomain *d_x,
+                 BtorBvDomain *d_y,
+                 BtorBvDomain *d_z,
+                 BtorBvDomain **res_d_x,
+                 BtorBvDomain **res_d_y,
+                 BtorBvDomain **res_d_z)
+{
+  assert (mm);
+  assert (d_x);
+  assert (d_y);
+  assert (d_z);
+
+  BtorBitVector *tmp0, *tmp1;
+
+  /* lo_x' = lo_x | lo_z
+   * hi_x' = hi_x & ~(~hi_z & lo_y)
+   */
+  *res_d_x       = new_domain (mm);
+  (*res_d_x)->lo = btor_bv_or (mm, d_x->lo, d_z->lo);
+  /* hi_x & ~((~hi_z) & lo_y) */
+  tmp0 = btor_bv_not (mm, d_z->hi);
+  tmp1 = btor_bv_and (mm, tmp0, d_y->lo);
+  btor_bv_free (mm, tmp0);
+  tmp0 = btor_bv_not (mm, tmp1);
+  btor_bv_free (mm, tmp1);
+  (*res_d_x)->hi = btor_bv_and (mm, d_x->hi, tmp0);
+  btor_bv_free (mm, tmp0);
+
+  /* lo_y' = lo_y | lo_z
+   * hi_y' = hi_y | ~(~hi_z & lo_x)
+   */
+  *res_d_y       = new_domain (mm);
+  (*res_d_y)->lo = btor_bv_or (mm, d_y->lo, d_z->lo);
+  /* hi_y & ~((~hi_z) & lo_x) */
+  tmp0 = btor_bv_not (mm, d_z->hi);
+  tmp1 = btor_bv_and (mm, tmp0, d_x->lo);
+  btor_bv_free (mm, tmp0);
+  tmp0 = btor_bv_not (mm, tmp1);
+  btor_bv_free (mm, tmp1);
+  (*res_d_y)->hi = btor_bv_and (mm, d_y->hi, tmp0);
+  btor_bv_free (mm, tmp0);
+
+  /* lo_z' = lo_z | (lo_x & lo_y)
+   * hi_z' = hi_z & hi_x & hi_y
+   */
+  *res_d_z = new_domain (mm);
+  /* lo_z | (lo_x & lo_y) */
+  tmp0           = btor_bv_and (mm, d_x->lo, d_y->lo);
+  (*res_d_z)->lo = btor_bv_or (mm, d_z->lo, tmp0);
+  btor_bv_free (mm, tmp0);
+  /* hi_z & hi_x & hi_y */
+  tmp0           = btor_bv_and (mm, d_x->hi, d_y->hi);
+  (*res_d_z)->hi = btor_bv_and (mm, d_z->hi, tmp0);
+  btor_bv_free (mm, tmp0);
 }

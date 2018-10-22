@@ -52,6 +52,18 @@ init_bvprop_tests (void)
   }
 }
 
+static void
+print_domain (BtorBvDomain *d)
+{
+  char *s;
+  s = btor_bv_to_char (g_mm, d->lo);
+  printf ("lo: %s, ", s);
+  btor_mem_freestr (g_mm, s);
+  s = btor_bv_to_char (g_mm, d->hi);
+  printf ("hi: %s\n", s);
+  btor_mem_freestr (g_mm, s);
+}
+
 /* Create 2-valued bit-vector from 3-valued bit-vector 'bv' by initializing
  * 'x' values to 'bit'. */
 static BtorBitVector *
@@ -351,45 +363,41 @@ test_not_bvprop ()
 {
   BtorBvDomain *d_x, *d_z, *res_x, *res_z;
 
-  d_z = btor_bvprop_new_init (g_mm, TEST_BW);
   for (size_t i = 0; i < TEST_NUM_CONSTS; i++)
   {
     d_x = create_domain (g_consts[i]);
-    btor_bvprop_not (g_mm, d_x, d_z, &res_x, &res_z);
 
-    assert (btor_bvprop_is_valid (g_mm, res_x));
-    assert (btor_bvprop_is_valid (g_mm, res_z));
-    assert (btor_bvprop_is_fixed (g_mm, d_x)
-            == btor_bvprop_is_fixed (g_mm, res_x));
-    assert (btor_bvprop_is_fixed (g_mm, d_x)
-            == btor_bvprop_is_fixed (g_mm, res_z));
-    check_not (res_x, res_z);
+    for (size_t j = 0; j < TEST_NUM_CONSTS; j++)
+    {
+      d_z = create_domain (g_consts[j]);
+      btor_bvprop_not (g_mm, d_x, d_z, &res_x, &res_z);
 
+      if (btor_bvprop_is_valid (g_mm, res_z))
+      {
+        assert (btor_bvprop_is_valid (g_mm, res_x));
+        assert (!btor_bvprop_is_fixed (g_mm, d_z)
+                || (btor_bvprop_is_fixed (g_mm, res_x)
+                    && btor_bvprop_is_fixed (g_mm, res_z)));
+        check_not (res_x, res_z);
+      }
+      else
+      {
+        bool valid = true;
+        for (size_t k = 0; k < TEST_BW && valid; k++)
+        {
+          if (g_consts[i][k] != 'x' && g_consts[i][k] == g_consts[j][k])
+          {
+            valid = false;
+          }
+        }
+        assert (!valid);
+      }
+      btor_bvprop_free (g_mm, d_z);
+      btor_bvprop_free (g_mm, res_x);
+      btor_bvprop_free (g_mm, res_z);
+    }
     btor_bvprop_free (g_mm, d_x);
-    btor_bvprop_free (g_mm, res_x);
-    btor_bvprop_free (g_mm, res_z);
   }
-  btor_bvprop_free (g_mm, d_z);
-
-  d_x = btor_bvprop_new_init (g_mm, TEST_BW);
-  for (size_t i = 0; i < TEST_NUM_CONSTS; i++)
-  {
-    d_z = create_domain (g_consts[i]);
-    btor_bvprop_not (g_mm, d_x, d_z, &res_x, &res_z);
-
-    assert (btor_bvprop_is_valid (g_mm, res_x));
-    assert (btor_bvprop_is_valid (g_mm, res_z));
-    assert (btor_bvprop_is_fixed (g_mm, d_z)
-            == btor_bvprop_is_fixed (g_mm, res_x));
-    assert (btor_bvprop_is_fixed (g_mm, d_z)
-            == btor_bvprop_is_fixed (g_mm, res_z));
-    check_not (res_x, res_z);
-
-    btor_bvprop_free (g_mm, d_z);
-    btor_bvprop_free (g_mm, res_x);
-    btor_bvprop_free (g_mm, res_z);
-  }
-  btor_bvprop_free (g_mm, d_x);
 }
 
 static void
@@ -461,6 +469,63 @@ test_srl_const_bvprop ()
   test_shift_const_bvprop_aux (true);
 }
 
+void
+test_and_bvprop ()
+{
+  BtorBvDomain *d_x, *d_y, *d_z;
+  BtorBvDomain *res_x, *res_y, *res_z;
+
+  for (size_t i = 0; i < TEST_NUM_CONSTS; i++)
+  {
+    d_z = create_domain (g_consts[i]);
+    for (size_t j = 0; j < TEST_NUM_CONSTS; j++)
+    {
+      d_x = create_domain (g_consts[j]);
+      for (size_t k = 0; k < TEST_NUM_CONSTS; k++)
+      {
+        d_y = create_domain (g_consts[k]);
+
+        btor_bvprop_and (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+
+        if (btor_bvprop_is_valid (g_mm, res_z))
+        {
+          assert (btor_bvprop_is_valid (g_mm, res_x));
+          assert (btor_bvprop_is_valid (g_mm, res_y));
+
+          for (size_t l = 0; l < TEST_BW; l++)
+          {
+            assert (g_consts[i][l] != '1'
+                    || (g_consts[j][l] != '0' && g_consts[k][l] != '0'));
+            assert (g_consts[i][l] != '0'
+                    || (g_consts[j][l] != '1' || g_consts[k][l] != '1'));
+          }
+        }
+        else
+        {
+          bool valid = true;
+          for (size_t l = 0; l < TEST_BW && valid; l++)
+          {
+            if ((g_consts[i][l] == '0' && g_consts[j][l] != '0'
+                 && g_consts[k][l] != '0')
+                || (g_consts[i][l] == '1'
+                    && (g_consts[j][l] == '0' || g_consts[k][l] == '0')))
+            {
+              valid = false;
+            }
+          }
+          assert (!valid);
+        }
+        btor_bvprop_free (g_mm, d_y);
+        btor_bvprop_free (g_mm, res_x);
+        btor_bvprop_free (g_mm, res_y);
+        btor_bvprop_free (g_mm, res_z);
+      }
+      btor_bvprop_free (g_mm, d_x);
+    }
+    btor_bvprop_free (g_mm, d_z);
+  }
+}
+
 /*------------------------------------------------------------------------*/
 
 void
@@ -473,6 +538,7 @@ run_bvprop_tests (int32_t argc, char **argv)
   BTOR_RUN_TEST (not_bvprop);
   BTOR_RUN_TEST (sll_const_bvprop);
   BTOR_RUN_TEST (srl_const_bvprop);
+  BTOR_RUN_TEST (and_bvprop);
 }
 
 void
