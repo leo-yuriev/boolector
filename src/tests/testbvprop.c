@@ -218,6 +218,23 @@ check_sll_const (BtorBvDomain *d_x, BtorBvDomain *d_z, uint32_t n)
   btor_mem_freestr (g_mm, str_z);
 }
 
+static void
+check_srl_const (BtorBvDomain *d_x, BtorBvDomain *d_z, uint32_t n)
+{
+  char *str_x = from_domain (g_mm, d_x);
+  char *str_z = from_domain (g_mm, d_z);
+  assert (strlen (str_x) == strlen (str_z));
+
+  size_t len = strlen (str_x);
+  for (size_t i = 0; i < len; i++)
+  {
+    assert (i >= n || str_z[i] == '0');
+    assert (i < n || str_z[i] == str_x[i - n]);
+  }
+  btor_mem_freestr (g_mm, str_x);
+  btor_mem_freestr (g_mm, str_z);
+}
+
 /*------------------------------------------------------------------------*/
 
 void
@@ -375,8 +392,8 @@ test_not_bvprop ()
   btor_bvprop_free (g_mm, d_x);
 }
 
-void
-test_sll_const_bvprop ()
+static void
+test_shift_const_bvprop_aux (bool is_srl)
 {
   size_t i, j;
   uint32_t n;
@@ -400,13 +417,20 @@ test_sll_const_bvprop ()
       for (n = 0; n < TEST_BW + 1; n++)
       {
         bv_n = btor_bv_uint64_to_bv (g_mm, n, TEST_BW);
-        btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+        if (is_srl)
+          btor_bvprop_srl_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+        else
+          btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+
         assert (btor_bvprop_is_valid (g_mm, res_x));
         assert (btor_bvprop_is_valid (g_mm, res_z));
         assert (j == 0
                 || btor_bvprop_is_fixed (g_mm, d_x)
                        == btor_bvprop_is_fixed (g_mm, res_x));
-        check_sll_const (res_x, res_z, n);
+        if (is_srl)
+          check_srl_const (res_x, res_z, n);
+        else
+          check_sll_const (res_x, res_z, n);
 
         btor_bvprop_free (g_mm, res_x);
         btor_bvprop_free (g_mm, res_z);
@@ -417,12 +441,26 @@ test_sll_const_bvprop ()
       else
         btor_bvprop_free (g_mm, d_z);
     }
+
     if (j)
       btor_bvprop_free (g_mm, d_z);
     else
       btor_bvprop_free (g_mm, d_x);
   }
 }
+
+void
+test_sll_const_bvprop ()
+{
+  test_shift_const_bvprop_aux (false);
+}
+
+void
+test_srl_const_bvprop ()
+{
+  test_shift_const_bvprop_aux (true);
+}
+
 /*------------------------------------------------------------------------*/
 
 void
@@ -434,6 +472,7 @@ run_bvprop_tests (int32_t argc, char **argv)
   BTOR_RUN_TEST (eq_bvprop);
   BTOR_RUN_TEST (not_bvprop);
   BTOR_RUN_TEST (sll_const_bvprop);
+  BTOR_RUN_TEST (srl_const_bvprop);
 }
 
 void

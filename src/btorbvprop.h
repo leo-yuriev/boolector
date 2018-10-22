@@ -64,6 +64,14 @@ void btor_bvprop_sll_const (BtorMemMgr *mm,
                             BtorBvDomain **res_d_x,
                             BtorBvDomain **res_d_z);
 
+/* Propagate domains 'd_x' and 'd_z' of z = x >> n where n is const. */
+void btor_bvprop_srl_const (BtorMemMgr *mm,
+                            BtorBvDomain *d_x,
+                            BtorBvDomain *d_z,
+                            BtorBitVector *n,
+                            BtorBvDomain **res_d_x,
+                            BtorBvDomain **res_d_z);
+
 // TODO:
 // propagators:
 //
