@@ -526,6 +526,64 @@ test_and_bvprop ()
   }
 }
 
+void
+test_slice_bvprop ()
+{
+  char buf[TEST_BW + 1];
+  BtorBvDomain *d_x, *d_z, *res_x, *res_z;
+
+  for (size_t i = 0; i < TEST_NUM_CONSTS; i++)
+  {
+    d_x = create_domain (g_consts[i]);
+    for (size_t j = 0; j < TEST_NUM_CONSTS; j++)
+    {
+      for (uint32_t lower = 0; lower < TEST_BW; lower++)
+      {
+        for (uint32_t upper = lower; upper < TEST_BW; upper++)
+        {
+          memset (buf, 0, sizeof (buf));
+          memcpy (buf, &g_consts[j][TEST_BW - 1 - upper], upper - lower + 1);
+          assert (strlen (buf) > 0);
+          assert (strlen (buf) == upper - lower + 1);
+
+          d_z = create_domain (buf);
+          btor_bvprop_slice (g_mm, d_x, d_z, upper, lower, &res_x, &res_z);
+          if (btor_bvprop_is_valid (g_mm, res_z))
+          {
+            assert (btor_bvprop_is_valid (g_mm, res_x));
+            char *str_res_x = from_domain (g_mm, res_x);
+            char *str_res_z = from_domain (g_mm, res_z);
+            for (size_t k = 0; k < upper - lower + 1; k++)
+            {
+              assert (str_res_z[k] == str_res_x[TEST_BW - 1 - upper + k]);
+            }
+            btor_mem_freestr (g_mm, str_res_x);
+            btor_mem_freestr (g_mm, str_res_z);
+          }
+          else
+          {
+            assert (!btor_bvprop_is_valid (g_mm, res_x));
+            bool valid = true;
+            for (size_t k = 0; k < TEST_BW; k++)
+            {
+              if (buf[k] != g_consts[i][TEST_BW - 1 - upper + k])
+              {
+                valid = false;
+                break;
+              }
+            }
+            assert (!valid);
+          }
+          btor_bvprop_free (g_mm, d_z);
+          btor_bvprop_free (g_mm, res_x);
+          btor_bvprop_free (g_mm, res_z);
+        }
+      }
+    }
+    btor_bvprop_free (g_mm, d_x);
+  }
+}
+
 /*------------------------------------------------------------------------*/
 
 void
@@ -539,6 +597,7 @@ run_bvprop_tests (int32_t argc, char **argv)
   BTOR_RUN_TEST (sll_const_bvprop);
   BTOR_RUN_TEST (srl_const_bvprop);
   BTOR_RUN_TEST (and_bvprop);
+  BTOR_RUN_TEST (slice_bvprop);
 }
 
 void

@@ -99,29 +99,32 @@ btor_bvprop_eq (BtorMemMgr *mm,
   (*res_d_xy)->lo = btor_bv_or (mm, d_x->lo, d_y->lo);
   (*res_d_xy)->hi = btor_bv_and (mm, d_x->hi, d_y->hi);
 
-  if (btor_bvprop_is_valid (mm, *res_d_xy))
+  if (res_d_z)
   {
-    /* Domain is valid and fixed: equality is true. */
-    if (btor_bvprop_is_fixed (mm, *res_d_xy))
+    if (btor_bvprop_is_valid (mm, *res_d_xy))
     {
-      *res_d_z       = new_domain (mm);
-      (*res_d_z)->lo = btor_bv_one (mm, 1);
-      (*res_d_z)->hi = btor_bv_one (mm, 1);
+      /* Domain is valid and fixed: equality is true. */
+      if (btor_bvprop_is_fixed (mm, *res_d_xy))
+      {
+        *res_d_z       = new_domain (mm);
+        (*res_d_z)->lo = btor_bv_one (mm, 1);
+        (*res_d_z)->hi = btor_bv_one (mm, 1);
+      }
+      /* Domain is valid and not fixed: equality can be true/false. */
+      else
+      {
+        *res_d_z = btor_bvprop_new_init (mm, 1);
+      }
     }
-    /* Domain is valid and not fixed: equality can be true/false. */
+    /* Domain is invalid: equality is false. */
     else
     {
-      *res_d_z = btor_bvprop_new_init (mm, 1);
+      *res_d_z       = new_domain (mm);
+      (*res_d_z)->lo = btor_bv_zero (mm, 1);
+      (*res_d_z)->hi = btor_bv_zero (mm, 1);
     }
+    assert (btor_bvprop_is_valid (mm, *res_d_z));
   }
-  /* Domain is invalid: equality is false. */
-  else
-  {
-    *res_d_z       = new_domain (mm);
-    (*res_d_z)->lo = btor_bv_zero (mm, 1);
-    (*res_d_z)->hi = btor_bv_zero (mm, 1);
-  }
-  assert (btor_bvprop_is_valid (mm, *res_d_z));
 }
 
 void
@@ -346,4 +349,77 @@ btor_bvprop_and (BtorMemMgr *mm,
   tmp0           = btor_bv_and (mm, d_x->hi, d_y->hi);
   (*res_d_z)->hi = btor_bv_and (mm, d_z->hi, tmp0);
   btor_bv_free (mm, tmp0);
+}
+
+void
+btor_bvprop_slice (BtorMemMgr *mm,
+                   BtorBvDomain *d_x,
+                   BtorBvDomain *d_z,
+                   uint32_t upper,
+                   uint32_t lower,
+                   BtorBvDomain **res_d_x,
+                   BtorBvDomain **res_d_z)
+{
+  assert (mm);
+  assert (d_x);
+  assert (d_z);
+  assert (upper >= lower);
+  assert (upper < d_x->lo->width);
+  assert (upper - lower + 1 == d_z->lo->width);
+
+  /* Apply equality propagator on sliced 'x' domain.
+   *
+   * lo_x' = lo_x[wx-1:upper+1] o lo_x[upper:lower] | lo_z o lo_x[lower - 1:0]
+   * hi_x' = hi_x[wx-1:upper+1] o hi_x[upper:lower] & hi_z o hi_x[lower - 1:0]
+   *
+   * Note: We don't use the propagator described in [1] since it changes the
+   *       don't care bits of 'd_x'.
+   */
+
+  BtorBvDomain *sliced_x = new_domain (mm);
+  sliced_x->lo           = btor_bv_slice (mm, d_x->lo, upper, lower);
+  sliced_x->hi           = btor_bv_slice (mm, d_x->hi, upper, lower);
+
+  btor_bvprop_eq (mm, sliced_x, d_z, res_d_z, 0);
+  btor_bvprop_free (mm, sliced_x);
+
+  uint32_t wx = d_x->lo->width;
+
+  *res_d_x = new_domain (mm);
+
+  BtorBitVector *lo_x = btor_bv_copy (mm, (*res_d_z)->lo);
+  BtorBitVector *hi_x = btor_bv_copy (mm, (*res_d_z)->hi);
+  BtorBitVector *tmp;
+  if (lower > 0)
+  {
+    BtorBitVector *lower_lo_x = btor_bv_slice (mm, d_x->lo, lower - 1, 0);
+    BtorBitVector *lower_hi_x = btor_bv_slice (mm, d_x->hi, lower - 1, 0);
+    tmp                       = btor_bv_concat (mm, lo_x, lower_lo_x);
+    btor_bv_free (mm, lo_x);
+    lo_x = tmp;
+    tmp  = btor_bv_concat (mm, hi_x, lower_hi_x);
+    btor_bv_free (mm, hi_x);
+    hi_x = tmp;
+    btor_bv_free (mm, lower_lo_x);
+    btor_bv_free (mm, lower_hi_x);
+  }
+
+  if (upper < wx - 1)
+  {
+    BtorBitVector *upper_lo_x = btor_bv_slice (mm, d_x->lo, wx - 1, upper + 1);
+    BtorBitVector *upper_hi_x = btor_bv_slice (mm, d_x->hi, wx - 1, upper + 1);
+    tmp                       = btor_bv_concat (mm, upper_lo_x, lo_x);
+    btor_bv_free (mm, lo_x);
+    lo_x = tmp;
+    tmp  = btor_bv_concat (mm, upper_hi_x, hi_x);
+    btor_bv_free (mm, hi_x);
+    hi_x = tmp;
+    btor_bv_free (mm, upper_lo_x);
+    btor_bv_free (mm, upper_hi_x);
+  }
+
+  assert (lo_x->width == wx);
+  assert (hi_x->width == wx);
+  (*res_d_x)->lo = lo_x;
+  (*res_d_x)->hi = hi_x;
 }

@@ -41,7 +41,7 @@ bool btor_bvprop_is_fixed (BtorMemMgr *mm, const BtorBvDomain *d);
 /* Propagate domains 'd_x' and 'd_y' of z = (x = y). The domains for 'x' and
  * 'y' are either the same or the resulting domain 'res_xy' is invalid.
  * Domain 'res_d_z' is either fixed (if res_d_xy is fixed or invalid) or valid
- * (all values possible).
+ * (all values possible). Note: 'res_d_z' is optional and can be NULL.
  */
 void btor_bvprop_eq (BtorMemMgr *mm,
                      BtorBvDomain *d_x,
@@ -80,6 +80,15 @@ void btor_bvprop_and (BtorMemMgr *mm,
                       BtorBvDomain **res_d_x,
                       BtorBvDomain **res_d_y,
                       BtorBvDomain **res_d_z);
+
+/* Propagate domains 'd_x' and 'd_z' of z = x[upper:lower]. */
+void btor_bvprop_slice (BtorMemMgr *mm,
+                        BtorBvDomain *d_x,
+                        BtorBvDomain *d_z,
+                        uint32_t upper,
+                        uint32_t lower,
+                        BtorBvDomain **res_d_x,
+                        BtorBvDomain **res_d_z);
 
 // TODO:
 // propagators:
