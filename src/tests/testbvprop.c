@@ -378,54 +378,50 @@ test_not_bvprop ()
 void
 test_sll_const_bvprop ()
 {
-  size_t i;
+  size_t i, j;
   uint32_t n;
   BtorBitVector *bv_n;
   BtorBvDomain *d_x, *d_z, *res_x, *res_z;
 
-  d_z = btor_bvprop_new_init (g_mm, TEST_BW);
-  for (i = 0; i < TEST_NUM_CONSTS; i++)
+  for (j = 0; j < 2; j++)
   {
-    d_x = create_domain (g_consts[i]);
-    for (n = 0; n < TEST_BW + 1; n++)
+    if (j)
+      d_z = btor_bvprop_new_init (g_mm, TEST_BW);
+    else
+      d_x = btor_bvprop_new_init (g_mm, TEST_BW);
+
+    for (i = 0; i < TEST_NUM_CONSTS; i++)
     {
-      bv_n = btor_bv_uint64_to_bv(g_mm, n, TEST_BW);
-      btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
-      assert (btor_bvprop_is_valid (g_mm, res_x));
-      assert (btor_bvprop_is_valid (g_mm, res_z));
-      assert (btor_bvprop_is_fixed (g_mm, d_x)
-              == btor_bvprop_is_fixed (g_mm, res_x));
-      check_sll_const (res_x, res_z, n);
+      if (j)
+        d_x = create_domain (g_consts[i]);
+      else
+        d_z = create_domain (g_consts[i]);
 
-      btor_bvprop_free (g_mm, res_x);
-      btor_bvprop_free (g_mm, res_z);
-      btor_bv_free (g_mm, bv_n);
+      for (n = 0; n < TEST_BW + 1; n++)
+      {
+        bv_n = btor_bv_uint64_to_bv (g_mm, n, TEST_BW);
+        btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+        assert (btor_bvprop_is_valid (g_mm, res_x));
+        assert (btor_bvprop_is_valid (g_mm, res_z));
+        assert (j == 0
+                || btor_bvprop_is_fixed (g_mm, d_x)
+                       == btor_bvprop_is_fixed (g_mm, res_x));
+        check_sll_const (res_x, res_z, n);
+
+        btor_bvprop_free (g_mm, res_x);
+        btor_bvprop_free (g_mm, res_z);
+        btor_bv_free (g_mm, bv_n);
+      }
+      if (j)
+        btor_bvprop_free (g_mm, d_x);
+      else
+        btor_bvprop_free (g_mm, d_z);
     }
-    btor_bvprop_free (g_mm, d_x);
+    if (j)
+      btor_bvprop_free (g_mm, d_z);
+    else
+      btor_bvprop_free (g_mm, d_x);
   }
-  btor_bvprop_free (g_mm, d_z);
-
-  d_z = btor_bvprop_new_init (g_mm, TEST_BW);
-  for (i = 0; i < TEST_NUM_CONSTS; i++)
-  {
-    d_x = create_domain (g_consts[i]);
-    for (n = 0; n < TEST_BW + 1; n++)
-    {
-      bv_n = btor_bv_uint64_to_bv(g_mm, n, TEST_BW);
-      btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
-      assert (btor_bvprop_is_valid (g_mm, res_x));
-      assert (btor_bvprop_is_valid (g_mm, res_z));
-      assert (btor_bvprop_is_fixed (g_mm, d_x)
-              == btor_bvprop_is_fixed (g_mm, res_x));
-      check_sll_const (res_x, res_z, n);
-
-      btor_bvprop_free (g_mm, res_x);
-      btor_bvprop_free (g_mm, res_z);
-      btor_bv_free (g_mm, bv_n);
-    }
-    btor_bvprop_free (g_mm, d_x);
-  }
-  btor_bvprop_free (g_mm, d_z);
 }
 /*------------------------------------------------------------------------*/
 
