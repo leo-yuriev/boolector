@@ -192,9 +192,17 @@ BtorBitVector *btor_bv_ulte (BtorMemMgr *mm,
                              const BtorBitVector *a,
                              const BtorBitVector *b);
 
+BtorBitVector *btor_bv_sll_uint32 (BtorMemMgr *mm,
+                                   const BtorBitVector *a,
+                                   uint32_t shift);
+
 BtorBitVector *btor_bv_sll (BtorMemMgr *mm,
                             const BtorBitVector *a,
                             const BtorBitVector *b);
+
+BtorBitVector *btor_bv_srl_uint32 (BtorMemMgr *mm,
+                                   const BtorBitVector *a,
+                                   uint32_t shift);
 
 BtorBitVector *btor_bv_srl (BtorMemMgr *mm,
                             const BtorBitVector *a,
