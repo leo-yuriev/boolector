@@ -81,6 +81,15 @@ void btor_bvprop_and (BtorMemMgr *mm,
                       BtorBvDomain **res_d_y,
                       BtorBvDomain **res_d_z);
 
+/* Propagate domains 'd_x', 'd_y' and 'd_z' of z = x | y. */
+void btor_bvprop_or (BtorMemMgr *mm,
+                     BtorBvDomain *d_x,
+                     BtorBvDomain *d_y,
+                     BtorBvDomain *d_z,
+                     BtorBvDomain **res_d_x,
+                     BtorBvDomain **res_d_y,
+                     BtorBvDomain **res_d_z);
+
 /* Propagate domains 'd_x' and 'd_z' of z = x[upper:lower]. */
 void btor_bvprop_slice (BtorMemMgr *mm,
                         BtorBvDomain *d_x,

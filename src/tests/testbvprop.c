@@ -534,7 +534,7 @@ test_srl_const_bvprop ()
 }
 
 void
-test_and_bvprop ()
+test_and_or_bvprop_aux (bool is_or)
 {
   BtorBvDomain *d_x, *d_y, *d_z;
   BtorBvDomain *res_x, *res_y, *res_z;
@@ -549,7 +549,10 @@ test_and_bvprop ()
       {
         d_y = create_domain (g_consts[k]);
 
-        btor_bvprop_and (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+        if (is_or)
+          btor_bvprop_or (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+        else
+          btor_bvprop_and (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
 
         if (btor_bvprop_is_valid (g_mm, res_z))
         {
@@ -558,10 +561,20 @@ test_and_bvprop ()
 
           for (size_t l = 0; l < TEST_BW; l++)
           {
-            assert (g_consts[i][l] != '1'
-                    || (g_consts[j][l] != '0' && g_consts[k][l] != '0'));
-            assert (g_consts[i][l] != '0'
-                    || (g_consts[j][l] != '1' || g_consts[k][l] != '1'));
+            if (is_or)
+            {
+              assert (g_consts[i][l] != '1'
+                      || (g_consts[j][l] != '0' || g_consts[k][l] != '0'));
+              assert (g_consts[i][l] != '0'
+                      || (g_consts[j][l] != '1' && g_consts[k][l] != '1'));
+            }
+            else
+            {
+              assert (g_consts[i][l] != '1'
+                      || (g_consts[j][l] != '0' && g_consts[k][l] != '0'));
+              assert (g_consts[i][l] != '0'
+                      || (g_consts[j][l] != '1' || g_consts[k][l] != '1'));
+            }
           }
         }
         else
@@ -569,10 +582,17 @@ test_and_bvprop ()
           bool valid = true;
           for (size_t l = 0; l < TEST_BW && valid; l++)
           {
-            if ((g_consts[i][l] == '0' && g_consts[j][l] != '0'
-                 && g_consts[k][l] != '0')
-                || (g_consts[i][l] == '1'
-                    && (g_consts[j][l] == '0' || g_consts[k][l] == '0')))
+            if ((is_or
+                 && ((g_consts[i][l] == '1' && g_consts[j][l] != '1'
+                      && g_consts[k][l] != '1')
+                     || (g_consts[i][l] == '0'
+                         && (g_consts[j][l] == '1' || g_consts[k][l] == '1'))))
+                || (!is_or
+                    && ((g_consts[i][l] == '0' && g_consts[j][l] != '0'
+                         && g_consts[k][l] != '0')
+                        || (g_consts[i][l] == '1'
+                            && (g_consts[j][l] == '0'
+                                || g_consts[k][l] == '0')))))
             {
               valid = false;
             }
@@ -586,6 +606,18 @@ test_and_bvprop ()
     }
     btor_bvprop_free (g_mm, d_z);
   }
+}
+
+void
+test_and_bvprop ()
+{
+  test_and_or_bvprop_aux (false);
+}
+
+void
+test_or_bvprop ()
+{
+  test_and_or_bvprop_aux (true);
 }
 
 void
@@ -750,6 +782,7 @@ run_bvprop_tests (int32_t argc, char **argv)
   BTOR_RUN_TEST (sll_const_bvprop);
   BTOR_RUN_TEST (srl_const_bvprop);
   BTOR_RUN_TEST (and_bvprop);
+  BTOR_RUN_TEST (or_bvprop);
   BTOR_RUN_TEST (slice_bvprop);
   BTOR_RUN_TEST (concat_bvprop);
 }
