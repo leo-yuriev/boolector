@@ -312,6 +312,9 @@ btor_bvprop_and (BtorMemMgr *mm,
   assert (d_x);
   assert (d_y);
   assert (d_z);
+  assert (res_d_x);
+  assert (res_d_y);
+  assert (res_d_z);
 
   BtorBitVector *tmp0, *tmp1;
 
@@ -456,7 +459,7 @@ btor_bvprop_concat (BtorMemMgr *mm,
 #if 0
   /* These are the propagators as proposed in [1]. */
 
-  BtorBitVector *mask, *zero, *ones, *tmp, *tmp1;
+  BtorBitVector *mask, *zero, *ones, *tmp0, *tmp1;
   BtorBitVector *lo_x, *hi_x, *lo_y, *hi_y;
 
   lo_x = btor_bv_uext (mm, d_x->lo, wz - wx);
@@ -473,45 +476,45 @@ btor_bvprop_concat (BtorMemMgr *mm,
   *res_d_z = new_domain (mm);
 
   /* lo_z' = lo_z | ((lo_x << wy) | lo_y) */
-  tmp            = btor_bv_sll_uint32 (mm, lo_x, wy);
-  tmp1           = btor_bv_or (mm, tmp, lo_y);
+  tmp0           = btor_bv_sll_uint32 (mm, lo_x, wy);
+  tmp1           = btor_bv_or (mm, tmp0, lo_y);
   (*res_d_z)->lo = btor_bv_or (mm, d_z->lo, tmp1);
-  btor_bv_free (mm, tmp);
+  btor_bv_free (mm, tmp0);
   btor_bv_free (mm, tmp1);
 
   /* hi_z' = hi_z & ((hi_x << wy) | hi_y) */
-  tmp            = btor_bv_sll_uint32 (mm, hi_x, wy);
-  tmp1           = btor_bv_or (mm, tmp, hi_y);
+  tmp0           = btor_bv_sll_uint32 (mm, hi_x, wy);
+  tmp1           = btor_bv_or (mm, tmp0, hi_y);
   (*res_d_z)->hi = btor_bv_and (mm, d_z->hi, tmp1);
-  btor_bv_free (mm, tmp);
+  btor_bv_free (mm, tmp0);
   btor_bv_free (mm, tmp1);
 
   /* lo_x' = lo_x | (lo_z >> wy) */
-  tmp            = btor_bv_srl_uint32 (mm, d_z->lo, wy);
-  tmp1           = btor_bv_or (mm, lo_x, tmp);
+  tmp0           = btor_bv_srl_uint32 (mm, d_z->lo, wy);
+  tmp1           = btor_bv_or (mm, lo_x, tmp0);
   (*res_d_x)->lo = btor_bv_slice (mm, tmp1, wx - 1, 0);
-  btor_bv_free (mm, tmp);
+  btor_bv_free (mm, tmp0);
   btor_bv_free (mm, tmp1);
 
   /* hi_x' = hi_x & (hi_z >> wy) */
-  tmp            = btor_bv_srl_uint32 (mm, d_z->hi, wy);
-  tmp1           = btor_bv_and (mm, hi_x, tmp);
+  tmp0           = btor_bv_srl_uint32 (mm, d_z->hi, wy);
+  tmp1           = btor_bv_and (mm, hi_x, tmp0);
   (*res_d_x)->hi = btor_bv_slice (mm, tmp1, wx - 1, 0);
-  btor_bv_free (mm, tmp);
+  btor_bv_free (mm, tmp0);
   btor_bv_free (mm, tmp1);
 
   /* lo_y' = lo_y | (lo_z & mask */
-  tmp            = btor_bv_and (mm, d_z->lo, mask);
-  tmp1           = btor_bv_or (mm, lo_y, tmp);
+  tmp0           = btor_bv_and (mm, d_z->lo, mask);
+  tmp1           = btor_bv_or (mm, lo_y, tmp0);
   (*res_d_y)->lo = btor_bv_slice (mm, tmp1, wy - 1, 0);
-  btor_bv_free (mm, tmp);
+  btor_bv_free (mm, tmp0);
   btor_bv_free (mm, tmp1);
 
   /* hi_y' = hi_y & (hi_z & mask) */
-  tmp            = btor_bv_and (mm, d_z->hi, mask);
-  tmp1           = btor_bv_and (mm, hi_y, tmp);
+  tmp0           = btor_bv_and (mm, d_z->hi, mask);
+  tmp1           = btor_bv_and (mm, hi_y, tmp0);
   (*res_d_y)->hi = btor_bv_slice (mm, tmp1, wy - 1, 0);
-  btor_bv_free (mm, tmp);
+  btor_bv_free (mm, tmp0);
   btor_bv_free (mm, tmp1);
 
   btor_bv_free (mm, lo_x);
