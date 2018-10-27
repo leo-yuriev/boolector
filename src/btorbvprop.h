@@ -23,8 +23,8 @@ typedef struct BtorBvDomain BtorBvDomain;
 /* Create new bit-vector domain of width 'width' with low 0 and high ~0. */
 BtorBvDomain *btor_bvprop_new_init (BtorMemMgr *mm, uint32_t width);
 
-/* Create new bit-vector domain with low 'lo' and high 'hi'. Makes copies of
- * lo/hi. */
+/* Create new bit-vector domain with low 'lo' and high 'hi'.
+ * Creates copies of lo and hi. */
 BtorBvDomain *btor_bvprop_new (BtorMemMgr *mm,
                                const BtorBitVector *lo,
                                const BtorBitVector *hi);
@@ -43,21 +43,21 @@ bool btor_bvprop_is_fixed (BtorMemMgr *mm, const BtorBvDomain *d);
  * Domain 'res_d_z' is either fixed (if res_d_xy is fixed or invalid) or valid
  * (all values possible). Note: 'res_d_z' is optional and can be NULL.
  */
-void btor_bvprop_eq (BtorMemMgr *mm,
+bool btor_bvprop_eq (BtorMemMgr *mm,
                      BtorBvDomain *d_x,
                      BtorBvDomain *d_y,
                      BtorBvDomain **res_d_xy,
                      BtorBvDomain **res_d_z);
 
 /* Propagate domains 'd_x' and 'd_z' of z = ~x. */
-void btor_bvprop_not (BtorMemMgr *mm,
+bool btor_bvprop_not (BtorMemMgr *mm,
                       BtorBvDomain *d_x,
                       BtorBvDomain *d_z,
                       BtorBvDomain **res_d_x,
                       BtorBvDomain **res_d_z);
 
 /* Propagate domains 'd_x' and 'd_z' of z = x << n where n is const. */
-void btor_bvprop_sll_const (BtorMemMgr *mm,
+bool btor_bvprop_sll_const (BtorMemMgr *mm,
                             BtorBvDomain *d_x,
                             BtorBvDomain *d_z,
                             BtorBitVector *n,
@@ -65,7 +65,7 @@ void btor_bvprop_sll_const (BtorMemMgr *mm,
                             BtorBvDomain **res_d_z);
 
 /* Propagate domains 'd_x' and 'd_z' of z = x >> n where n is const. */
-void btor_bvprop_srl_const (BtorMemMgr *mm,
+bool btor_bvprop_srl_const (BtorMemMgr *mm,
                             BtorBvDomain *d_x,
                             BtorBvDomain *d_z,
                             BtorBitVector *n,
@@ -73,7 +73,7 @@ void btor_bvprop_srl_const (BtorMemMgr *mm,
                             BtorBvDomain **res_d_z);
 
 /* Propagate domains 'd_x', 'd_y' and 'd_z' of z = x & y. */
-void btor_bvprop_and (BtorMemMgr *mm,
+bool btor_bvprop_and (BtorMemMgr *mm,
                       BtorBvDomain *d_x,
                       BtorBvDomain *d_y,
                       BtorBvDomain *d_z,
@@ -82,7 +82,7 @@ void btor_bvprop_and (BtorMemMgr *mm,
                       BtorBvDomain **res_d_z);
 
 /* Propagate domains 'd_x', 'd_y' and 'd_z' of z = x | y. */
-void btor_bvprop_or (BtorMemMgr *mm,
+bool btor_bvprop_or (BtorMemMgr *mm,
                      BtorBvDomain *d_x,
                      BtorBvDomain *d_y,
                      BtorBvDomain *d_z,
@@ -91,7 +91,7 @@ void btor_bvprop_or (BtorMemMgr *mm,
                      BtorBvDomain **res_d_z);
 
 /* Propagate domains 'd_x', 'd_y' and 'd_z' of z = x | y. */
-void btor_bvprop_xor (BtorMemMgr *mm,
+bool btor_bvprop_xor (BtorMemMgr *mm,
                       BtorBvDomain *d_x,
                       BtorBvDomain *d_y,
                       BtorBvDomain *d_z,
@@ -100,7 +100,7 @@ void btor_bvprop_xor (BtorMemMgr *mm,
                       BtorBvDomain **res_d_z);
 
 /* Propagate domains 'd_x' and 'd_z' of z = x[upper:lower]. */
-void btor_bvprop_slice (BtorMemMgr *mm,
+bool btor_bvprop_slice (BtorMemMgr *mm,
                         BtorBvDomain *d_x,
                         BtorBvDomain *d_z,
                         uint32_t upper,
@@ -109,7 +109,7 @@ void btor_bvprop_slice (BtorMemMgr *mm,
                         BtorBvDomain **res_d_z);
 
 /* Propagate domains 'd_x', 'd_y' and 'd_z' of z = x o y. */
-void btor_bvprop_concat (BtorMemMgr *mm,
+bool btor_bvprop_concat (BtorMemMgr *mm,
                          BtorBvDomain *d_x,
                          BtorBvDomain *d_y,
                          BtorBvDomain *d_z,
