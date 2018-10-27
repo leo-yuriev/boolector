@@ -362,11 +362,11 @@ check_sat (BtorBvDomain *d_x,
 
   size_t i;
   int32_t sat_res;
-  uint32_t bw, bwz, idx;
+  uint32_t bwx, bwy, bwz, idx;
   char *str_x, *str_y, *str_z;
   Btor *btor;
   BoolectorNode *x, *y, *z, *fun, *eq, *slice, *one, *zero;
-  BoolectorSort sw, swz, s1;
+  BoolectorSort swx, swy, swz, s1;
 
   str_x = from_domain (g_mm, d_x);
   str_y = 0;
@@ -374,14 +374,14 @@ check_sat (BtorBvDomain *d_x,
 
   btor = boolector_new ();
   boolector_set_opt (btor, BTOR_OPT_MODEL_GEN, 1);
-  bw   = d_x->lo->width;
-  sw   = boolector_bitvec_sort (btor, bw);
+  bwx  = d_x->lo->width;
+  swx  = boolector_bitvec_sort (btor, bwx);
   bwz  = d_z->lo->width;
   swz  = boolector_bitvec_sort (btor, bwz);
   s1   = boolector_bitvec_sort (btor, 1);
   one  = boolector_one (btor, s1);
   zero = boolector_zero (btor, s1);
-  x    = boolector_var (btor, sw, "x");
+  x    = boolector_var (btor, swx, "x");
   y    = 0;
   if (unfun)
   {
@@ -391,7 +391,9 @@ check_sat (BtorBvDomain *d_x,
   else if (binfun)
   {
     str_y = from_domain (g_mm, d_y);
-    y     = boolector_var (btor, sw, "y");
+    bwy   = d_y->lo->width;
+    swy   = boolector_bitvec_sort (btor, bwy);
+    y     = boolector_var (btor, swy, "y");
     z     = boolector_var (btor, swz, "z");
     fun   = binfun (btor, x, y);
   }
@@ -405,9 +407,9 @@ check_sat (BtorBvDomain *d_x,
   boolector_release (btor, fun);
   boolector_release (btor, eq);
 
-  for (i = 0; i < bw; i++)
+  for (i = 0; i < bwx; i++)
   {
-    idx = bw - i - 1;
+    idx = bwx - i - 1;
     if (str_x[i] != 'x')
     {
       slice = boolector_slice (btor, x, idx, idx);
@@ -419,9 +421,9 @@ check_sat (BtorBvDomain *d_x,
   }
   if (str_y)
   {
-    for (i = 0; i < bw; i++)
+    for (i = 0; i < bwy; i++)
     {
-      idx = bw - i - 1;
+      idx = bwy - i - 1;
       if (str_y[i] != 'x')
       {
         slice = boolector_slice (btor, y, idx, idx);
@@ -461,7 +463,8 @@ check_sat (BtorBvDomain *d_x,
   boolector_release (btor, z);
   boolector_release (btor, one);
   boolector_release (btor, zero);
-  boolector_release_sort (btor, sw);
+  boolector_release_sort (btor, swx);
+  if (y) boolector_release_sort (btor, swy);
   boolector_release_sort (btor, swz);
   boolector_release_sort (btor, s1);
   boolector_delete (btor);
@@ -923,30 +926,32 @@ test_slice_bvprop ()
   }
 }
 
-#define TEST_PROPBV_CONCAT                                            \
-  do                                                                  \
-  {                                                                   \
-    btor_bvprop_concat (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z); \
-    assert (!btor_bvprop_is_fixed (g_mm, d_x)                         \
-            || !btor_bv_compare (d_x->lo, res_x->lo));                \
-    assert (!btor_bvprop_is_fixed (g_mm, d_y)                         \
-            || !btor_bv_compare (d_y->lo, res_y->lo));                \
-    assert (!btor_bvprop_is_fixed (g_mm, d_z)                         \
-            || !btor_bv_compare (d_z->lo, res_z->lo));                \
-    check_concat (res_x, res_y, res_z);                               \
-    assert (btor_bvprop_is_valid (g_mm, res_x));                      \
-    assert (btor_bvprop_is_valid (g_mm, res_y));                      \
-    assert (btor_bvprop_is_valid (g_mm, res_z));                      \
-    assert (!btor_bvprop_is_fixed (g_mm, d_x)                         \
-            || btor_bvprop_is_fixed (g_mm, res_x));                   \
-    assert (!btor_bvprop_is_fixed (g_mm, d_y)                         \
-            || btor_bvprop_is_fixed (g_mm, res_y));                   \
-    assert (!btor_bvprop_is_fixed (g_mm, d_z)                         \
-            || (btor_bvprop_is_fixed (g_mm, res_x)                    \
-                && btor_bvprop_is_fixed (g_mm, res_y)                 \
-                && btor_bvprop_is_fixed (g_mm, res_z)));              \
-    TEST_BVPROP_RELEASE_D_XYZ;                                        \
-    TEST_BVPROP_RELEASE_RES_XYZ;                                      \
+#define TEST_PROPBV_CONCAT                                                     \
+  do                                                                           \
+  {                                                                            \
+    assert (btor_bvprop_concat (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z)   \
+            || !is_valid (g_mm, res_x, res_y, res_z));                         \
+    check_sat (d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_concat, 0, 0); \
+    assert (!btor_bvprop_is_fixed (g_mm, d_x)                                  \
+            || !btor_bv_compare (d_x->lo, res_x->lo));                         \
+    assert (!btor_bvprop_is_fixed (g_mm, d_y)                                  \
+            || !btor_bv_compare (d_y->lo, res_y->lo));                         \
+    assert (!btor_bvprop_is_fixed (g_mm, d_z)                                  \
+            || !btor_bv_compare (d_z->lo, res_z->lo));                         \
+    check_concat (res_x, res_y, res_z);                                        \
+    assert (btor_bvprop_is_valid (g_mm, res_x));                               \
+    assert (btor_bvprop_is_valid (g_mm, res_y));                               \
+    assert (btor_bvprop_is_valid (g_mm, res_z));                               \
+    assert (!btor_bvprop_is_fixed (g_mm, d_x)                                  \
+            || btor_bvprop_is_fixed (g_mm, res_x));                            \
+    assert (!btor_bvprop_is_fixed (g_mm, d_y)                                  \
+            || btor_bvprop_is_fixed (g_mm, res_y));                            \
+    assert (!btor_bvprop_is_fixed (g_mm, d_z)                                  \
+            || (btor_bvprop_is_fixed (g_mm, res_x)                             \
+                && btor_bvprop_is_fixed (g_mm, res_y)                          \
+                && btor_bvprop_is_fixed (g_mm, res_z)));                       \
+    TEST_BVPROP_RELEASE_D_XYZ;                                                 \
+    TEST_BVPROP_RELEASE_RES_XYZ;                                               \
   } while (0)
 
 void
