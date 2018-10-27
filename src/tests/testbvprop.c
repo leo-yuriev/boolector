@@ -351,21 +351,22 @@ check_sat (BtorBvDomain *d_x,
            BtorBvDomain *res_y,
            BtorBvDomain *res_z,
            BoolectorNode *(*unfun) (Btor *, BoolectorNode *),
-           BoolectorNode *(*binfun) (Btor *, BoolectorNode *, BoolectorNode *) )
+           BoolectorNode *(*binfun) (Btor *, BoolectorNode *, BoolectorNode *),
+           uint32_t hi,
+           uint32_t lo)
 {
   assert (d_x);
   assert (d_z);
   assert (res_x);
   assert (res_z);
-  assert (unfun || binfun);
 
   size_t i;
   int32_t sat_res;
-  uint32_t bw, idx;
+  uint32_t bw, bwz, idx;
   char *str_x, *str_y, *str_z;
   Btor *btor;
   BoolectorNode *x, *y, *z, *fun, *eq, *slice, *one, *zero;
-  BoolectorSort sw, s1;
+  BoolectorSort sw, swz, s1;
 
   str_x = from_domain (g_mm, d_x);
   str_y = 0;
@@ -375,21 +376,29 @@ check_sat (BtorBvDomain *d_x,
   boolector_set_opt (btor, BTOR_OPT_MODEL_GEN, 1);
   bw   = d_x->lo->width;
   sw   = boolector_bitvec_sort (btor, bw);
+  bwz  = d_z->lo->width;
+  swz  = boolector_bitvec_sort (btor, bwz);
   s1   = boolector_bitvec_sort (btor, 1);
   one  = boolector_one (btor, s1);
   zero = boolector_zero (btor, s1);
   x    = boolector_var (btor, sw, "x");
   y    = 0;
-  z    = boolector_var (btor, sw, "z");
   if (unfun)
   {
     fun = unfun (btor, x);
+    z   = boolector_var (btor, swz, "z");
   }
-  else
+  else if (binfun)
   {
     str_y = from_domain (g_mm, d_y);
     y     = boolector_var (btor, sw, "y");
+    z     = boolector_var (btor, swz, "z");
     fun   = binfun (btor, x, y);
+  }
+  else
+  {
+    z   = boolector_var (btor, swz, "z");
+    fun = boolector_slice (btor, x, hi, lo);
   }
   eq = boolector_eq (btor, fun, z);
   boolector_assert (btor, eq);
@@ -407,14 +416,25 @@ check_sat (BtorBvDomain *d_x,
       boolector_release (btor, eq);
       boolector_release (btor, slice);
     }
-    if (str_y && str_y[i] != 'x')
+  }
+  if (str_y)
+  {
+    for (i = 0; i < bw; i++)
     {
-      slice = boolector_slice (btor, y, idx, idx);
-      eq    = boolector_eq (btor, slice, str_y[i] == '1' ? one : zero);
-      boolector_assert (btor, eq);
-      boolector_release (btor, eq);
-      boolector_release (btor, slice);
+      idx = bw - i - 1;
+      if (str_y[i] != 'x')
+      {
+        slice = boolector_slice (btor, y, idx, idx);
+        eq    = boolector_eq (btor, slice, str_y[i] == '1' ? one : zero);
+        boolector_assert (btor, eq);
+        boolector_release (btor, eq);
+        boolector_release (btor, slice);
+      }
     }
+  }
+  for (i = 0; i < bwz; i++)
+  {
+    idx = bwz - i - 1;
     if (str_z[i] != 'x')
     {
       slice = boolector_slice (btor, z, idx, idx);
@@ -442,6 +462,7 @@ check_sat (BtorBvDomain *d_x,
   boolector_release (btor, one);
   boolector_release (btor, zero);
   boolector_release_sort (btor, sw);
+  boolector_release_sort (btor, swz);
   boolector_release_sort (btor, s1);
   boolector_delete (btor);
   btor_mem_freestr (g_mm, str_x);
@@ -574,7 +595,7 @@ test_not_bvprop ()
     {
       d_z = create_domain (g_consts[j]);
       res = btor_bvprop_not (g_mm, d_x, d_z, &res_x, &res_z);
-      check_sat (d_x, 0, d_z, res_x, 0, res_z, boolector_not, 0);
+      check_sat (d_x, 0, d_z, res_x, 0, res_z, boolector_not, 0, 0, 0);
 
       if (btor_bvprop_is_valid (g_mm, res_z))
       {
@@ -639,12 +660,12 @@ test_shift_const_bvprop_aux (bool is_srl)
         if (is_srl)
         {
           res = btor_bvprop_srl_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
-          check_sat (d_x, d_y, d_z, res_x, 0, res_z, 0, boolector_srl);
+          check_sat (d_x, d_y, d_z, res_x, 0, res_z, 0, boolector_srl, 0, 0);
         }
         else
         {
           btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
-          check_sat (d_x, d_y, d_z, res_x, 0, res_z, 0, boolector_sll);
+          check_sat (d_x, d_y, d_z, res_x, 0, res_z, 0, boolector_sll, 0, 0);
         }
         assert (res || !is_valid (g_mm, res_x, 0, res_z));
 
@@ -716,18 +737,20 @@ test_and_or_xor_bvprop_aux (int32_t op)
         if (op == TEST_BVPROP_AND)
         {
           res = btor_bvprop_and (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
-          check_sat (d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_and);
+          check_sat (
+              d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_and, 0, 0);
         }
         else if (op == TEST_BVPROP_OR)
         {
           res = btor_bvprop_or (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
-          check_sat (d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_or);
+          check_sat (d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_or, 0, 0);
         }
         else
         {
           assert (op == TEST_BVPROP_XOR);
           res = btor_bvprop_xor (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
-          check_sat (d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_xor);
+          check_sat (
+              d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_xor, 0, 0);
         }
         assert (res || !is_valid (g_mm, res_x, res_y, res_z));
 
@@ -853,7 +876,10 @@ test_slice_bvprop ()
           assert (strlen (buf) == upper - lower + 1);
 
           d_z = create_domain (buf);
-          btor_bvprop_slice (g_mm, d_x, d_z, upper, lower, &res_x, &res_z);
+          assert (
+              btor_bvprop_slice (g_mm, d_x, d_z, upper, lower, &res_x, &res_z)
+              || !is_valid (g_mm, res_x, 0, res_z));
+          check_sat (d_x, 0, d_z, res_x, 0, res_z, 0, 0, upper, lower);
 
           assert (!btor_bvprop_is_fixed (g_mm, d_x)
                   || !btor_bvprop_is_valid (g_mm, res_x)
