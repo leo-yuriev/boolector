@@ -616,7 +616,7 @@ test_shift_const_bvprop_aux (bool is_srl)
   size_t i, j;
   uint32_t n;
   BtorBitVector *bv_n;
-  BtorBvDomain *d_x, *d_z, *res_x, *res_z;
+  BtorBvDomain *d_x, *d_y, *d_z, *res_x, *res_z;
 
   for (j = 0; j < 2; j++)
   {
@@ -635,14 +635,24 @@ test_shift_const_bvprop_aux (bool is_srl)
       for (n = 0; n < TEST_BW + 1; n++)
       {
         bv_n = btor_bv_uint64_to_bv (g_mm, n, TEST_BW);
-        res =
-            is_srl
-                ? btor_bvprop_srl_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z)
-                : btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+        d_y  = btor_bvprop_new (g_mm, bv_n, bv_n);
+        if (is_srl)
+        {
+          res = btor_bvprop_srl_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+          check_sat (d_x, d_y, d_z, res_x, 0, res_z, 0, boolector_srl);
+        }
+        else
+        {
+          btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
+          check_sat (d_x, d_y, d_z, res_x, 0, res_z, 0, boolector_sll);
+        }
+        assert (res || !is_valid (g_mm, res_x, 0, res_z));
 
-        assert (!res || !btor_bvprop_is_fixed (g_mm, d_x)
+        assert (!btor_bvprop_is_fixed (g_mm, d_x)
+                || !btor_bvprop_is_valid (g_mm, res_x)
                 || !btor_bv_compare (d_x->lo, res_x->lo));
         assert (!res || !btor_bvprop_is_fixed (g_mm, d_z)
+                || !btor_bvprop_is_valid (g_mm, res_z)
                 || !btor_bv_compare (d_z->lo, res_z->lo));
 
         assert (j == 0
@@ -655,6 +665,7 @@ test_shift_const_bvprop_aux (bool is_srl)
 
         TEST_BVPROP_RELEASE_RES_XZ;
         btor_bv_free (g_mm, bv_n);
+        btor_bvprop_free (g_mm, d_y);
       }
       if (j)
         btor_bvprop_free (g_mm, d_x);
