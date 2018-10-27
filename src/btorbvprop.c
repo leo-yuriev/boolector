@@ -15,6 +15,7 @@
  */
 
 #include "btorbvprop.h"
+#include <stdio.h>
 
 static BtorBvDomain *
 new_domain (BtorMemMgr *mm)
@@ -705,9 +706,6 @@ btor_bvprop_concat (BtorMemMgr *mm,
   btor_bv_free (mm, zero);
   btor_bv_free (mm, ones);
   btor_bv_free (mm, mask);
-  return btor_bvprop_is_valid (mm, *res_d_x)
-         && btor_bvprop_is_valid (mm, *res_d_y)
-         && btor_bvprop_is_valid (mm, *res_d_z);
 #else
   /* These propagators are compositional (simpler). */
 
@@ -736,6 +734,8 @@ btor_bvprop_concat (BtorMemMgr *mm,
   btor_bv_free (mm, hi_zy);
   btor_bvprop_free (mm, d_zx);
   btor_bvprop_free (mm, d_zy);
-  return true;
 #endif
+  return btor_bvprop_is_valid (mm, *res_d_x)
+         && btor_bvprop_is_valid (mm, *res_d_y)
+         && btor_bvprop_is_valid (mm, *res_d_z);
 }

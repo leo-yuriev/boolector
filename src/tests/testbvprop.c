@@ -8,8 +8,10 @@
  */
 
 #include "testbvprop.h"
+
+#include "boolector.h"
+#include "btorbv.h"
 #include "btorbvprop.h"
-#include "btorcore.h"
 #include "testrunner.h"
 #include "utils/btormem.h"
 
@@ -173,6 +175,28 @@ from_domain (BtorMemMgr *mm, BtorBvDomain *d)
 }
 
 static bool
+is_xxx_domain (BtorMemMgr *mm, BtorBvDomain *d)
+{
+  assert (mm);
+  assert (d);
+  char *str_d = from_domain (mm, d);
+  bool res    = strchr (str_d, '1') == NULL && strchr (str_d, '0') == NULL;
+  btor_mem_freestr (mm, str_d);
+  return res;
+}
+
+static bool
+is_valid (BtorMemMgr *mm,
+          BtorBvDomain *d_x,
+          BtorBvDomain *d_y,
+          BtorBvDomain *d_z)
+{
+  return (!d_x || btor_bvprop_is_valid (mm, d_x))
+         && (!d_y || btor_bvprop_is_valid (mm, d_y))
+         && (!d_z || btor_bvprop_is_valid (mm, d_z));
+}
+
+static bool
 is_false_eq (const char *a, const char *b)
 {
   assert (strlen (a) == strlen (b));
@@ -319,6 +343,112 @@ check_concat (BtorBvDomain *d_x, BtorBvDomain *d_y, BtorBvDomain *d_z)
   btor_mem_freestr (g_mm, str_z);
 }
 
+static void
+check_sat (BtorBvDomain *d_x,
+           BtorBvDomain *d_y,
+           BtorBvDomain *d_z,
+           BtorBvDomain *res_x,
+           BtorBvDomain *res_y,
+           BtorBvDomain *res_z,
+           BoolectorNode *(*unfun) (Btor *, BoolectorNode *),
+           BoolectorNode *(*binfun) (Btor *, BoolectorNode *, BoolectorNode *) )
+{
+  assert (d_x);
+  assert (d_z);
+  assert (res_x);
+  assert (res_z);
+  assert (unfun || binfun);
+
+  size_t i;
+  int32_t sat_res;
+  uint32_t bw, idx;
+  char *str_x, *str_y, *str_z;
+  Btor *btor;
+  BoolectorNode *x, *y, *z, *fun, *eq, *slice, *one, *zero;
+  BoolectorSort sw, s1;
+
+  str_x = from_domain (g_mm, d_x);
+  str_y = 0;
+  str_z = from_domain (g_mm, d_z);
+
+  btor = boolector_new ();
+  boolector_set_opt (btor, BTOR_OPT_MODEL_GEN, 1);
+  bw   = d_x->lo->width;
+  sw   = boolector_bitvec_sort (btor, bw);
+  s1   = boolector_bitvec_sort (btor, 1);
+  one  = boolector_one (btor, s1);
+  zero = boolector_zero (btor, s1);
+  x    = boolector_var (btor, sw, "x");
+  y    = 0;
+  z    = boolector_var (btor, sw, "z");
+  if (unfun)
+  {
+    fun = unfun (btor, x);
+  }
+  else
+  {
+    str_y = from_domain (g_mm, d_y);
+    y     = boolector_var (btor, sw, "y");
+    fun   = binfun (btor, x, y);
+  }
+  eq = boolector_eq (btor, fun, z);
+  boolector_assert (btor, eq);
+  boolector_release (btor, fun);
+  boolector_release (btor, eq);
+
+  for (i = 0; i < bw; i++)
+  {
+    idx = bw - i - 1;
+    if (str_x[i] != 'x')
+    {
+      slice = boolector_slice (btor, x, idx, idx);
+      eq    = boolector_eq (btor, slice, str_x[i] == '1' ? one : zero);
+      boolector_assert (btor, eq);
+      boolector_release (btor, eq);
+      boolector_release (btor, slice);
+    }
+    if (str_y && str_y[i] != 'x')
+    {
+      slice = boolector_slice (btor, y, idx, idx);
+      eq    = boolector_eq (btor, slice, str_y[i] == '1' ? one : zero);
+      boolector_assert (btor, eq);
+      boolector_release (btor, eq);
+      boolector_release (btor, slice);
+    }
+    if (str_z[i] != 'x')
+    {
+      slice = boolector_slice (btor, z, idx, idx);
+      eq    = boolector_eq (btor, slice, str_z[i] == '1' ? one : zero);
+      boolector_assert (btor, eq);
+      boolector_release (btor, eq);
+      boolector_release (btor, slice);
+    }
+  }
+
+  // boolector_dump_smt2 (btor, stdout);
+  sat_res = boolector_sat (btor);
+  assert (sat_res != BTOR_RESULT_SAT || is_valid (g_mm, res_x, res_y, res_z));
+  assert (sat_res != BTOR_RESULT_UNSAT
+          || !is_valid (g_mm, res_x, res_y, res_z));
+  // printf ("sat_res %d\n", sat_res);
+  // if (sat_res == BOOLECTOR_SAT)
+  //{
+  //  boolector_print_model (btor, "btor", stdout);
+  //}
+
+  boolector_release (btor, x);
+  if (y) boolector_release (btor, y);
+  boolector_release (btor, z);
+  boolector_release (btor, one);
+  boolector_release (btor, zero);
+  boolector_release_sort (btor, sw);
+  boolector_release_sort (btor, s1);
+  boolector_delete (btor);
+  btor_mem_freestr (g_mm, str_x);
+  if (str_y) btor_mem_freestr (g_mm, str_y);
+  btor_mem_freestr (g_mm, str_z);
+}
+
 /*------------------------------------------------------------------------*/
 
 void
@@ -444,6 +574,7 @@ test_not_bvprop ()
     {
       d_z = create_domain (g_consts[j]);
       res = btor_bvprop_not (g_mm, d_x, d_z, &res_x, &res_z);
+      check_sat (d_x, 0, d_z, res_x, 0, res_z, boolector_not, 0);
 
       if (btor_bvprop_is_valid (g_mm, res_z))
       {
