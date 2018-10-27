@@ -699,6 +699,7 @@ test_srl_const_bvprop ()
 void
 test_and_or_xor_bvprop_aux (int32_t op)
 {
+  bool res;
   BtorBvDomain *d_x, *d_y, *d_z;
   BtorBvDomain *res_x, *res_y, *res_z;
 
@@ -714,17 +715,21 @@ test_and_or_xor_bvprop_aux (int32_t op)
 
         if (op == TEST_BVPROP_AND)
         {
-          btor_bvprop_and (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+          res = btor_bvprop_and (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+          check_sat (d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_and);
         }
         else if (op == TEST_BVPROP_OR)
         {
-          btor_bvprop_or (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+          res = btor_bvprop_or (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+          check_sat (d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_or);
         }
         else
         {
           assert (op == TEST_BVPROP_XOR);
-          btor_bvprop_xor (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+          res = btor_bvprop_xor (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+          check_sat (d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_xor);
         }
+        assert (res || !is_valid (g_mm, res_x, res_y, res_z));
 
         assert (!btor_bvprop_is_fixed (g_mm, d_x)
                 || !btor_bvprop_is_valid (g_mm, res_x)
