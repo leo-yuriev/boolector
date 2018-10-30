@@ -30,8 +30,8 @@ btor_bvprop_new_init (BtorMemMgr *mm, uint32_t width)
 {
   assert (mm);
   BtorBvDomain *res = new_domain (mm);
-  res->lo = btor_bv_zero (mm, width);
-  res->hi = btor_bv_ones (mm, width);
+  res->lo           = btor_bv_zero (mm, width);
+  res->hi           = btor_bv_ones (mm, width);
   return res;
 }
 
@@ -46,8 +46,8 @@ btor_bvprop_new (BtorMemMgr *mm,
   assert (lo->width == hi->width);
 
   BtorBvDomain *res = new_domain (mm);
-  res->lo = btor_bv_copy (mm, lo);
-  res->hi = btor_bv_copy (mm, hi);
+  res->lo           = btor_bv_copy (mm, lo);
+  res->hi           = btor_bv_copy (mm, hi);
   return res;
 }
 
@@ -738,4 +738,289 @@ btor_bvprop_concat (BtorMemMgr *mm,
   return btor_bvprop_is_valid (mm, *res_d_x)
          && btor_bvprop_is_valid (mm, *res_d_y)
          && btor_bvprop_is_valid (mm, *res_d_z);
+}
+
+static bool
+made_progress (BtorBvDomain *d_x,
+               BtorBvDomain *d_y,
+               BtorBvDomain *d_z,
+               BtorBvDomain *res_d_x,
+               BtorBvDomain *res_d_y,
+               BtorBvDomain *res_d_z)
+{
+  assert (d_x);
+  assert (d_z);
+  assert (res_d_x);
+  assert (res_d_z);
+  assert (!d_y || res_d_y);
+
+  uint32_t i;
+  uint32_t bw = d_x->lo->width;
+  assert (bw == d_x->hi->width);
+  assert (!d_y || bw == d_y->lo->width);
+  assert (!d_y || bw == d_y->hi->width);
+  assert (bw == d_z->lo->width);
+  assert (bw == d_z->hi->width);
+
+  for (i = 0; i < bw; i++)
+  {
+    if (btor_bv_get_bit (d_x->lo, i) != btor_bv_get_bit (res_d_x->lo, i)
+        || btor_bv_get_bit (d_x->hi, i) != btor_bv_get_bit (res_d_x->hi, i))
+      return true;
+    if (d_y
+        && (btor_bv_get_bit (d_y->lo, i) != btor_bv_get_bit (res_d_y->lo, i)
+            || btor_bv_get_bit (d_y->hi, i)
+                   != btor_bv_get_bit (res_d_y->hi, i)))
+      return true;
+    if (btor_bv_get_bit (d_z->lo, i) != btor_bv_get_bit (res_d_z->lo, i)
+        || btor_bv_get_bit (d_z->hi, i) != btor_bv_get_bit (res_d_z->hi, i))
+      return true;
+  }
+  return false;
+}
+
+bool
+btor_bvprop_add (BtorMemMgr *mm,
+                 BtorBvDomain *d_x,
+                 BtorBvDomain *d_y,
+                 BtorBvDomain *d_z,
+                 BtorBvDomain **res_d_x,
+                 BtorBvDomain **res_d_y,
+                 BtorBvDomain **res_d_z)
+{
+  assert (mm);
+  assert (d_x);
+  assert (btor_bvprop_is_valid (mm, d_x));
+  assert (d_y);
+  assert (btor_bvprop_is_valid (mm, d_y));
+  assert (d_z);
+  assert (btor_bvprop_is_valid (mm, d_z));
+  assert (res_d_x);
+  assert (res_d_y);
+  assert (res_d_z);
+
+  bool progress, res;
+  uint32_t bw;
+  BtorBitVector *one;
+  BtorBvDomain *tmp_x, *tmp_y, *tmp_z;
+  BtorBvDomain *tmp_cin, *tmp_cout;
+  BtorBvDomain *tmp_x_xor_y, *tmp_x_and_y;
+  BtorBvDomain *tmp_cin_and_x_xor_y;
+
+  res = true;
+
+  bw = d_x->lo->width;
+  assert (bw == d_x->hi->width);
+  assert (bw == d_y->lo->width);
+  assert (bw == d_y->hi->width);
+  assert (bw == d_z->lo->width);
+  assert (bw == d_z->hi->width);
+  one = btor_bv_one (mm, bw);
+
+  /* cin = x...x0 */
+  tmp_cin = btor_bvprop_new_init (mm, bw);
+  btor_bv_set_bit (tmp_cin->hi, 0, 0);
+  /* cout = x...x */
+  tmp_cout = btor_bvprop_new_init (mm, bw);
+
+  /**
+   * full adder:
+   * z    = x ^ y ^ cin
+   * cout = (x & y) | (cin & (x ^ y))
+   * cin  = cout << 1
+   */
+
+  tmp_x = btor_bvprop_new (mm, d_x->lo, d_x->hi);
+  tmp_y = btor_bvprop_new (mm, d_y->lo, d_y->hi);
+  tmp_z = btor_bvprop_new (mm, d_z->lo, d_z->hi);
+
+  tmp_x_xor_y         = btor_bvprop_new_init (mm, bw);
+  tmp_x_and_y         = btor_bvprop_new_init (mm, bw);
+  tmp_cin_and_x_xor_y = btor_bvprop_new_init (mm, bw);
+
+  do
+  {
+    progress = false;
+
+    /* x_xor_y = x ^ y */
+    if (!btor_bvprop_xor (
+            mm, tmp_x, tmp_y, tmp_x_xor_y, res_d_x, res_d_y, res_d_z))
+    {
+      res = false;
+      btor_bvprop_free (mm, *res_d_x);
+      btor_bvprop_free (mm, *res_d_y);
+      btor_bvprop_free (mm, *res_d_z);
+      goto DONE;
+    }
+    assert (btor_bvprop_is_valid (mm, *res_d_x));
+    assert (btor_bvprop_is_valid (mm, *res_d_y));
+    assert (btor_bvprop_is_valid (mm, *res_d_z));
+    if (!progress)
+    {
+      progress = made_progress (
+          tmp_x, tmp_y, tmp_x_xor_y, *res_d_x, *res_d_y, *res_d_z);
+    }
+    btor_bvprop_free (mm, tmp_x);
+    btor_bvprop_free (mm, tmp_y);
+    btor_bvprop_free (mm, tmp_x_xor_y);
+    tmp_x       = *res_d_x;
+    tmp_y       = *res_d_y;
+    tmp_x_xor_y = *res_d_z;
+
+    /* z = x_xor_y ^ cin */
+    if (!btor_bvprop_xor (
+            mm, tmp_x_xor_y, tmp_cin, tmp_z, res_d_x, res_d_y, res_d_z))
+    {
+      res = false;
+      btor_bvprop_free (mm, *res_d_x);
+      btor_bvprop_free (mm, *res_d_y);
+      btor_bvprop_free (mm, *res_d_z);
+      goto DONE;
+    }
+    assert (btor_bvprop_is_valid (mm, *res_d_x));
+    assert (btor_bvprop_is_valid (mm, *res_d_y));
+    assert (btor_bvprop_is_valid (mm, *res_d_z));
+    if (!progress)
+    {
+      progress = made_progress (
+          tmp_x_xor_y, tmp_cin, tmp_z, *res_d_x, *res_d_y, *res_d_z);
+    }
+    btor_bvprop_free (mm, tmp_x_xor_y);
+    btor_bvprop_free (mm, tmp_cin);
+    btor_bvprop_free (mm, tmp_z);
+    tmp_x_xor_y = *res_d_x;
+    tmp_cin     = *res_d_y;
+    tmp_z       = *res_d_z;
+
+    /* x_and_y = x & y */
+    if (!btor_bvprop_and (
+            mm, tmp_x, tmp_y, tmp_x_and_y, res_d_x, res_d_y, res_d_z))
+    {
+      res = false;
+      btor_bvprop_free (mm, *res_d_x);
+      btor_bvprop_free (mm, *res_d_y);
+      btor_bvprop_free (mm, *res_d_z);
+      goto DONE;
+    }
+    assert (btor_bvprop_is_valid (mm, *res_d_x));
+    assert (btor_bvprop_is_valid (mm, *res_d_y));
+    assert (btor_bvprop_is_valid (mm, *res_d_z));
+    if (!progress)
+    {
+      progress = made_progress (
+          tmp_x, tmp_y, tmp_x_and_y, *res_d_x, *res_d_y, *res_d_z);
+    }
+    btor_bvprop_free (mm, tmp_x);
+    btor_bvprop_free (mm, tmp_y);
+    btor_bvprop_free (mm, tmp_x_and_y);
+    tmp_x       = *res_d_x;
+    tmp_y       = *res_d_y;
+    tmp_x_and_y = *res_d_z;
+
+    /* cin_and_x_xor_y = cin & x_xor_y */
+    if (!btor_bvprop_and (mm,
+                          tmp_cin,
+                          tmp_x_xor_y,
+                          tmp_cin_and_x_xor_y,
+                          res_d_x,
+                          res_d_y,
+                          res_d_z))
+    {
+      res = false;
+      btor_bvprop_free (mm, *res_d_x);
+      btor_bvprop_free (mm, *res_d_y);
+      btor_bvprop_free (mm, *res_d_z);
+      goto DONE;
+    }
+    assert (btor_bvprop_is_valid (mm, *res_d_x));
+    assert (btor_bvprop_is_valid (mm, *res_d_y));
+    assert (btor_bvprop_is_valid (mm, *res_d_z));
+    if (!progress)
+    {
+      progress = made_progress (tmp_cin,
+                                tmp_x_xor_y,
+                                tmp_cin_and_x_xor_y,
+                                *res_d_x,
+                                *res_d_y,
+                                *res_d_z);
+    }
+    btor_bvprop_free (mm, tmp_cin);
+    btor_bvprop_free (mm, tmp_x_xor_y);
+    btor_bvprop_free (mm, tmp_cin_and_x_xor_y);
+    tmp_cin             = *res_d_x;
+    tmp_x_xor_y         = *res_d_y;
+    tmp_cin_and_x_xor_y = *res_d_z;
+
+    /* cout = x_and_y | cin_and_x_xor_y */
+    if (!btor_bvprop_or (mm,
+                         tmp_x_and_y,
+                         tmp_cin_and_x_xor_y,
+                         tmp_cout,
+                         res_d_x,
+                         res_d_y,
+                         res_d_z))
+    {
+      res = false;
+      btor_bvprop_free (mm, *res_d_x);
+      btor_bvprop_free (mm, *res_d_y);
+      btor_bvprop_free (mm, *res_d_z);
+      goto DONE;
+    }
+    assert (btor_bvprop_is_valid (mm, *res_d_x));
+    assert (btor_bvprop_is_valid (mm, *res_d_y));
+    assert (btor_bvprop_is_valid (mm, *res_d_z));
+    if (!progress)
+    {
+      progress = made_progress (tmp_x_and_y,
+                                tmp_cin_and_x_xor_y,
+                                tmp_cout,
+                                *res_d_x,
+                                *res_d_y,
+                                *res_d_z);
+    }
+    btor_bvprop_free (mm, tmp_x_and_y);
+    btor_bvprop_free (mm, tmp_cin_and_x_xor_y);
+    btor_bvprop_free (mm, tmp_cout);
+    tmp_x_and_y         = *res_d_x;
+    tmp_cin_and_x_xor_y = *res_d_y;
+    tmp_cout            = *res_d_z;
+
+    /* cin  = cout << 1 */
+    if (!btor_bvprop_sll_const (mm, tmp_cout, tmp_cin, one, res_d_x, res_d_z))
+    {
+      res = false;
+      btor_bvprop_free (mm, *res_d_x);
+      btor_bvprop_free (mm, *res_d_z);
+      goto DONE;
+    }
+    assert (btor_bvprop_is_valid (mm, *res_d_x));
+    assert (btor_bvprop_is_valid (mm, *res_d_z));
+    if (!progress)
+    {
+      progress = made_progress (tmp_cout, 0, tmp_cin, *res_d_x, 0, *res_d_z);
+    }
+    btor_bvprop_free (mm, tmp_cout);
+    btor_bvprop_free (mm, tmp_cin);
+    tmp_cout = *res_d_x;
+    tmp_cin  = *res_d_z;
+  } while (progress);
+
+  assert (btor_bvprop_is_valid (mm, tmp_x));
+  assert (btor_bvprop_is_valid (mm, tmp_y));
+  assert (btor_bvprop_is_valid (mm, tmp_z));
+
+DONE:
+  *res_d_x = tmp_x;
+  *res_d_y = tmp_y;
+  *res_d_z = tmp_z;
+
+  btor_bvprop_free (mm, tmp_cin);
+  btor_bvprop_free (mm, tmp_cout);
+  btor_bvprop_free (mm, tmp_x_xor_y);
+  btor_bvprop_free (mm, tmp_x_and_y);
+  btor_bvprop_free (mm, tmp_cin_and_x_xor_y);
+
+  btor_bv_free (mm, one);
+
+  return res;
 }
