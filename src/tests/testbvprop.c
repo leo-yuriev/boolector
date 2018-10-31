@@ -847,12 +847,6 @@ test_and_or_xor_bvprop_aux (int32_t op)
                 || !btor_bvprop_is_valid (g_mm, res_z)
                 || !btor_bv_compare (d_z->lo, res_z->lo));
 
-        // printf("d_x "); print_domain (d_x, true);
-        // printf("d_y "); print_domain (d_y, true);
-        // printf("d_z "); print_domain (d_z, true);
-        // printf("res_x "); print_domain (res_x, true);
-        // printf("res_y "); print_domain (res_y, true);
-        // printf("res_z "); print_domain (res_z, true);
         if (btor_bvprop_is_valid (g_mm, res_z))
         {
           assert (btor_bvprop_is_valid (g_mm, res_x));
