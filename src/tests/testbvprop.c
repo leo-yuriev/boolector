@@ -391,6 +391,7 @@ check_sat (BtorBvDomain *d_x,
            BoolectorNode *(*binfun) (Btor *, BoolectorNode *, BoolectorNode *),
            uint32_t hi,
            uint32_t lo,
+           bool decompositional,
            bool valid)
 {
   assert (d_x);
@@ -489,8 +490,12 @@ check_sat (BtorBvDomain *d_x,
   sat_res = boolector_sat (btor);
   assert (sat_res != BTOR_RESULT_SAT
           || (valid && is_valid (g_mm, res_x, res_y, res_z)));
-  assert (sat_res != BTOR_RESULT_UNSAT || !is_valid (g_mm, res_x, res_y, res_z)
-          || !valid || !is_fixed (g_mm, res_x, res_y, res_z));
+  assert (
+      sat_res != BTOR_RESULT_UNSAT
+      || ((decompositional || (!valid && !is_valid (g_mm, res_x, res_y, res_z)))
+          && (!decompositional || !valid
+              || !is_fixed (g_mm, res_x, res_y, res_z))));
+
   // printf ("sat_res %d\n", sat_res);
   // if (sat_res == BOOLECTOR_SAT)
   //{
@@ -637,7 +642,8 @@ test_not_bvprop ()
     {
       d_z = create_domain (g_consts[j]);
       res = btor_bvprop_not (g_mm, d_x, d_z, &res_x, &res_z);
-      check_sat (d_x, 0, d_z, res_x, 0, res_z, boolector_not, 0, 0, 0, res);
+      check_sat (
+          d_x, 0, d_z, res_x, 0, res_z, boolector_not, 0, 0, 0, false, res);
 
       if (btor_bvprop_is_valid (g_mm, res_z))
       {
@@ -702,14 +708,34 @@ test_shift_const_bvprop_aux (bool is_srl)
         if (is_srl)
         {
           res = btor_bvprop_srl_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
-          check_sat (
-              d_x, d_y, d_z, res_x, 0, res_z, 0, boolector_srl, 0, 0, res);
+          check_sat (d_x,
+                     d_y,
+                     d_z,
+                     res_x,
+                     0,
+                     res_z,
+                     0,
+                     boolector_srl,
+                     0,
+                     0,
+                     false,
+                     res);
         }
         else
         {
           res = btor_bvprop_sll_const (g_mm, d_x, d_z, bv_n, &res_x, &res_z);
-          check_sat (
-              d_x, d_y, d_z, res_x, 0, res_z, 0, boolector_sll, 0, 0, res);
+          check_sat (d_x,
+                     d_y,
+                     d_z,
+                     res_x,
+                     0,
+                     res_z,
+                     0,
+                     boolector_sll,
+                     0,
+                     0,
+                     false,
+                     res);
         }
         assert (res || !is_valid (g_mm, res_x, 0, res_z));
 
@@ -781,21 +807,51 @@ test_and_or_xor_bvprop_aux (int32_t op)
         if (op == TEST_BVPROP_AND)
         {
           res = btor_bvprop_and (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
-          check_sat (
-              d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_and, 0, 0, res);
+          check_sat (d_x,
+                     d_y,
+                     d_z,
+                     res_x,
+                     res_y,
+                     res_z,
+                     0,
+                     boolector_and,
+                     0,
+                     0,
+                     false,
+                     res);
         }
         else if (op == TEST_BVPROP_OR)
         {
           res = btor_bvprop_or (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
-          check_sat (
-              d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_or, 0, 0, res);
+          check_sat (d_x,
+                     d_y,
+                     d_z,
+                     res_x,
+                     res_y,
+                     res_z,
+                     0,
+                     boolector_or,
+                     0,
+                     0,
+                     false,
+                     res);
         }
         else
         {
           assert (op == TEST_BVPROP_XOR);
           res = btor_bvprop_xor (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
-          check_sat (
-              d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_xor, 0, 0, res);
+          check_sat (d_x,
+                     d_y,
+                     d_z,
+                     res_x,
+                     res_y,
+                     res_z,
+                     0,
+                     boolector_xor,
+                     0,
+                     0,
+                     false,
+                     res);
         }
         assert (res || !is_valid (g_mm, res_x, res_y, res_z));
 
@@ -931,7 +987,9 @@ test_slice_bvprop ()
           res =
               btor_bvprop_slice (g_mm, d_x, d_z, upper, lower, &res_x, &res_z);
           assert (res || !is_valid (g_mm, res_x, 0, res_z));
-          check_sat (d_x, 0, d_z, res_x, 0, res_z, 0, 0, upper, lower, res);
+          /* not compositional but eq always returns true */
+          check_sat (
+              d_x, 0, d_z, res_x, 0, res_z, 0, 0, upper, lower, false, res);
 
           assert (!btor_bvprop_is_fixed (g_mm, d_x)
                   || !btor_bvprop_is_valid (g_mm, res_x)
@@ -975,33 +1033,43 @@ test_slice_bvprop ()
   }
 }
 
-#define TEST_PROPBV_CONCAT                                                   \
-  do                                                                         \
-  {                                                                          \
-    res = btor_bvprop_concat (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);  \
-    assert (res || !is_valid (g_mm, res_x, res_y, res_z));                   \
-    check_sat (                                                              \
-        d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_concat, 0, 0, res); \
-    assert (!btor_bvprop_is_fixed (g_mm, d_x)                                \
-            || !btor_bv_compare (d_x->lo, res_x->lo));                       \
-    assert (!btor_bvprop_is_fixed (g_mm, d_y)                                \
-            || !btor_bv_compare (d_y->lo, res_y->lo));                       \
-    assert (!btor_bvprop_is_fixed (g_mm, d_z)                                \
-            || !btor_bv_compare (d_z->lo, res_z->lo));                       \
-    check_concat (res_x, res_y, res_z);                                      \
-    assert (btor_bvprop_is_valid (g_mm, res_x));                             \
-    assert (btor_bvprop_is_valid (g_mm, res_y));                             \
-    assert (btor_bvprop_is_valid (g_mm, res_z));                             \
-    assert (!btor_bvprop_is_fixed (g_mm, d_x)                                \
-            || btor_bvprop_is_fixed (g_mm, res_x));                          \
-    assert (!btor_bvprop_is_fixed (g_mm, d_y)                                \
-            || btor_bvprop_is_fixed (g_mm, res_y));                          \
-    assert (!btor_bvprop_is_fixed (g_mm, d_z)                                \
-            || (btor_bvprop_is_fixed (g_mm, res_x)                           \
-                && btor_bvprop_is_fixed (g_mm, res_y)                        \
-                && btor_bvprop_is_fixed (g_mm, res_z)));                     \
-    TEST_BVPROP_RELEASE_D_XYZ;                                               \
-    TEST_BVPROP_RELEASE_RES_XYZ;                                             \
+#define TEST_PROPBV_CONCAT                                                    \
+  do                                                                          \
+  {                                                                           \
+    res = btor_bvprop_concat (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);   \
+    assert (res || !is_valid (g_mm, res_x, res_y, res_z));                    \
+    check_sat (d_x,                                                           \
+               d_y,                                                           \
+               d_z,                                                           \
+               res_x,                                                         \
+               res_y,                                                         \
+               res_z,                                                         \
+               0,                                                             \
+               boolector_concat,                                              \
+               0,                                                             \
+               0,                                                             \
+               false, /* not compositional but eq always returns true */      \
+               res);                                                          \
+    assert (!btor_bvprop_is_fixed (g_mm, d_x)                                 \
+            || !btor_bv_compare (d_x->lo, res_x->lo));                        \
+    assert (!btor_bvprop_is_fixed (g_mm, d_y)                                 \
+            || !btor_bv_compare (d_y->lo, res_y->lo));                        \
+    assert (!btor_bvprop_is_fixed (g_mm, d_z)                                 \
+            || !btor_bv_compare (d_z->lo, res_z->lo));                        \
+    check_concat (res_x, res_y, res_z);                                       \
+    assert (btor_bvprop_is_valid (g_mm, res_x));                              \
+    assert (btor_bvprop_is_valid (g_mm, res_y));                              \
+    assert (btor_bvprop_is_valid (g_mm, res_z));                              \
+    assert (!btor_bvprop_is_fixed (g_mm, d_x)                                 \
+            || btor_bvprop_is_fixed (g_mm, res_x));                           \
+    assert (!btor_bvprop_is_fixed (g_mm, d_y)                                 \
+            || btor_bvprop_is_fixed (g_mm, res_y));                           \
+    assert (!btor_bvprop_is_fixed (g_mm, d_z)                                 \
+            || (btor_bvprop_is_fixed (g_mm, res_x)                            \
+                && btor_bvprop_is_fixed (g_mm, res_y)                         \
+                && btor_bvprop_is_fixed (g_mm, res_z)));                      \
+    TEST_BVPROP_RELEASE_D_XYZ;                                                \
+    TEST_BVPROP_RELEASE_RES_XYZ;                                              \
   } while (0)
 
 void
@@ -1096,8 +1164,18 @@ test_add_bvprop ()
         d_y = create_domain (g_consts[k]);
 
         res = btor_bvprop_add (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
-        check_sat (
-            d_x, d_y, d_z, res_x, res_y, res_z, 0, boolector_add, 0, 0, res);
+        check_sat (d_x,
+                   d_y,
+                   d_z,
+                   res_x,
+                   res_y,
+                   res_z,
+                   0,
+                   boolector_add,
+                   0,
+                   0,
+                   true,
+                   res);
 
         if (btor_bvprop_is_fixed (g_mm, d_x)
             && btor_bvprop_is_fixed (g_mm, d_y))

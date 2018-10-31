@@ -562,7 +562,11 @@ btor_bvprop_slice (BtorMemMgr *mm,
   sliced_x->lo           = btor_bv_slice (mm, d_x->lo, upper, lower);
   sliced_x->hi           = btor_bv_slice (mm, d_x->hi, upper, lower);
 
-  if (!btor_bvprop_eq (mm, sliced_x, d_z, res_d_z, 0)) return false;
+  if (!btor_bvprop_eq (mm, sliced_x, d_z, res_d_z, 0))
+  {
+    btor_bvprop_free (mm, sliced_x);
+    return false;
+  }
   btor_bvprop_free (mm, sliced_x);
 
   uint32_t wx = d_x->lo->width;
@@ -628,6 +632,7 @@ btor_bvprop_concat (BtorMemMgr *mm,
   assert (res_d_y);
   assert (res_d_z);
 
+  bool res;
   uint32_t wx, wy, wz;
 
   wx = d_x->hi->width;
@@ -706,8 +711,11 @@ btor_bvprop_concat (BtorMemMgr *mm,
   btor_bv_free (mm, zero);
   btor_bv_free (mm, ones);
   btor_bv_free (mm, mask);
+  res = btor_bvprop_is_valid (mm, *res_d_x)
+        && btor_bvprop_is_valid (mm, *res_d_y)
+        && btor_bvprop_is_valid (mm, *res_d_z);
 #else
-  /* These propagators are compositional (simpler). */
+  /* These propagators are decompositional (simpler). */
 
   BtorBitVector *lo_zx, *lo_zy, *hi_zx, *hi_zy;
   BtorBvDomain *d_zx, *d_zy;
@@ -723,11 +731,24 @@ btor_bvprop_concat (BtorMemMgr *mm,
   *res_d_z = new_domain (mm);
 
   /* res_z = prop(d_zx = d_x) o prop(d_zy o d_y) */
-  if (!btor_bvprop_eq (mm, d_zx, d_x, res_d_x, 0)) return false;
-  if (!btor_bvprop_eq (mm, d_zy, d_y, res_d_y, 0)) return false;
+  if (!btor_bvprop_eq (mm, d_zx, d_x, res_d_x, 0))
+  {
+    res = false;
+    goto DONE;
+  }
+  if (!btor_bvprop_eq (mm, d_zy, d_y, res_d_y, 0))
+  {
+    res = false;
+    goto DONE;
+  }
+
   (*res_d_z)->lo = btor_bv_concat (mm, (*res_d_x)->lo, (*res_d_y)->lo);
   (*res_d_z)->hi = btor_bv_concat (mm, (*res_d_x)->hi, (*res_d_y)->hi);
 
+  res = btor_bvprop_is_valid (mm, *res_d_x)
+        && btor_bvprop_is_valid (mm, *res_d_y)
+        && btor_bvprop_is_valid (mm, *res_d_z);
+DONE:
   btor_bv_free (mm, lo_zx);
   btor_bv_free (mm, lo_zy);
   btor_bv_free (mm, hi_zx);
@@ -735,9 +756,7 @@ btor_bvprop_concat (BtorMemMgr *mm,
   btor_bvprop_free (mm, d_zx);
   btor_bvprop_free (mm, d_zy);
 #endif
-  return btor_bvprop_is_valid (mm, *res_d_x)
-         && btor_bvprop_is_valid (mm, *res_d_y)
-         && btor_bvprop_is_valid (mm, *res_d_z);
+  return res;
 }
 
 static bool
