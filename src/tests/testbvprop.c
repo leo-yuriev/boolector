@@ -687,19 +687,12 @@ test_shift_const_bvprop_aux (bool is_srl)
   BtorBitVector *bv_n;
   BtorBvDomain *d_x, *d_y, *d_z, *res_x, *res_z;
 
-  for (j = 0; j < 2; j++)
+  for (i = 0; i < TEST_NUM_CONSTS; i++)
   {
-    if (j)
-      d_z = btor_bvprop_new_init (g_mm, TEST_BW);
-    else
-      d_x = btor_bvprop_new_init (g_mm, TEST_BW);
-
-    for (i = 0; i < TEST_NUM_CONSTS; i++)
+    d_z = create_domain (g_consts[i]);
+    for (j = 0; j < TEST_NUM_CONSTS; j++)
     {
-      if (j)
-        d_x = create_domain (g_consts[i]);
-      else
-        d_z = create_domain (g_consts[i]);
+      d_x = create_domain (g_consts[j]);
 
       for (n = 0; n < TEST_BW + 1; n++)
       {
@@ -745,10 +738,6 @@ test_shift_const_bvprop_aux (bool is_srl)
         assert (!res || !btor_bvprop_is_fixed (g_mm, d_z)
                 || !btor_bvprop_is_valid (g_mm, res_z)
                 || !btor_bv_compare (d_z->lo, res_z->lo));
-
-        assert (j == 0
-                || btor_bvprop_is_fixed (g_mm, d_x)
-                       == btor_bvprop_is_fixed (g_mm, res_x));
         if (is_srl)
           check_srl_const (res_x, res_z, n);
         else
@@ -758,16 +747,9 @@ test_shift_const_bvprop_aux (bool is_srl)
         btor_bv_free (g_mm, bv_n);
         btor_bvprop_free (g_mm, d_y);
       }
-      if (j)
-        btor_bvprop_free (g_mm, d_x);
-      else
-        btor_bvprop_free (g_mm, d_z);
-    }
-
-    if (j)
-      btor_bvprop_free (g_mm, d_z);
-    else
       btor_bvprop_free (g_mm, d_x);
+    }
+    btor_bvprop_free (g_mm, d_z);
   }
 }
 
