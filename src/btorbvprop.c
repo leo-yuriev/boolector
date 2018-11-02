@@ -759,6 +759,267 @@ DONE:
   return res;
 }
 
+bool
+btor_bvprop_sext (BtorMemMgr *mm,
+                  BtorBvDomain *d_x,
+                  BtorBvDomain *d_z,
+                  BtorBvDomain **res_d_x,
+                  BtorBvDomain **res_d_z)
+{
+  assert (mm);
+  assert (d_x);
+  assert (btor_bvprop_is_valid (mm, d_x));
+  assert (d_z);
+  assert (btor_bvprop_is_valid (mm, d_z));
+  assert (res_d_x);
+  assert (res_d_z);
+
+  uint32_t wx, wn, wz, lo_x_lsb, hi_x_lsb;
+  BtorBitVector *tmp0, *tmp1, *tmp2;
+  BtorBitVector *slice_lo_z_hi, *slice_hi_z_hi;
+  BtorBitVector *redor, *redand, *x_or_z, *x_and_z;
+
+  *res_d_x = new_domain (mm);
+  *res_d_z = new_domain (mm);
+
+  wx = d_x->hi->width;
+  assert (wx == d_x->lo->width);
+  wz = d_z->hi->width;
+  assert (wz == d_z->lo->width);
+  wn = wz - wx;
+  assert (wn);
+
+  lo_x_lsb = btor_bv_get_bit (d_x->lo, wx - 1);
+  hi_x_lsb = btor_bv_get_bit (d_x->hi, wx - 1);
+
+  /* Note: The propagators for x and z from [1] are incorrect!
+   * E.g. for x = 1 and z = 001 we expect an invalid result, but these
+   * propagators produce x' = 1 and z' = 111. */
+
+  if (wx > 1)
+  {
+    tmp0   = btor_bv_slice (mm, d_x->lo, wx - 2, 0);
+    tmp1   = btor_bv_slice (mm, d_z->lo, wx - 2, 0);
+    x_or_z = btor_bv_or (mm, tmp0, tmp1);
+    btor_bv_free (mm, tmp0);
+    btor_bv_free (mm, tmp1);
+
+    tmp0    = btor_bv_slice (mm, d_x->hi, wx - 2, 0);
+    tmp1    = btor_bv_slice (mm, d_z->hi, wx - 2, 0);
+    x_and_z = btor_bv_and (mm, tmp0, tmp1);
+    btor_bv_free (mm, tmp0);
+    btor_bv_free (mm, tmp1);
+  }
+  slice_lo_z_hi =
+      wx > 1 ? btor_bv_slice (mm, d_z->lo, wz - 1, wx - 1) : d_z->lo;
+  slice_hi_z_hi =
+      wx > 1 ? btor_bv_slice (mm, d_z->hi, wz - 1, wx - 1) : d_z->hi;
+
+  redor  = btor_bv_redor (mm, slice_lo_z_hi);
+  redand = btor_bv_redand (mm, slice_hi_z_hi);
+
+  /**
+   * lo_x' = (lo_x[wx-1:wx-1] | redor (lo_z[wz-1:wx-1]))
+   *         :: (lo_x[wx-2:0] | lo_z[wx-2:0])
+   */
+  tmp1 = btor_bv_slice (mm, d_x->lo, wx - 1, wx - 1);
+  tmp0 = btor_bv_or (mm, tmp1, redor);
+  btor_bv_free (mm, tmp1);
+  if (wx > 1)
+  {
+    (*res_d_x)->lo = btor_bv_concat (mm, tmp0, x_or_z);
+    btor_bv_free (mm, tmp0);
+  }
+  else
+  {
+    (*res_d_x)->lo = tmp0;
+  }
+
+  /**
+   * hi_x' = (hi_x[wx-1:wx-1] & redand (hi_z[wz-1:wx-1]))
+   *         :: (hi_x[wx-2:0] & hi_z[wx-2:0])
+   */
+  tmp1 = btor_bv_slice (mm, d_x->hi, wx - 1, wx - 1);
+  tmp0 = btor_bv_and (mm, tmp1, redand);
+  btor_bv_free (mm, tmp1);
+  if (wx > 1)
+  {
+    (*res_d_x)->hi = btor_bv_concat (mm, tmp0, x_and_z);
+    btor_bv_free (mm, tmp0);
+  }
+  else
+  {
+    (*res_d_x)->hi = tmp0;
+  }
+
+  /**
+   * lo_z' = (lo_z[wz-1:wx-1]
+   *          | sext(redor (lo_z[wz-1:wx-1]), wn)
+   *          | sext(lo_x[wx-1:wx-1], wn))
+   *         :: (lo_z[wx-2:0] | lo_x[wx-2:0])
+   */
+  tmp0 = lo_x_lsb ? btor_bv_ones (mm, wn + 1) : btor_bv_zero (mm, wn + 1);
+  tmp1 = btor_bv_or (mm, slice_lo_z_hi, tmp0);
+  btor_bv_free (mm, tmp0);
+  tmp2 = btor_bv_sext (mm, redor, wn);
+  tmp0 = btor_bv_or (mm, tmp1, tmp2);
+  btor_bv_free (mm, tmp1);
+  btor_bv_free (mm, tmp2);
+  if (wx > 1)
+  {
+    (*res_d_z)->lo = btor_bv_concat (mm, tmp0, x_or_z);
+    btor_bv_free (mm, tmp0);
+  }
+  else
+  {
+    (*res_d_z)->lo = tmp0;
+  }
+
+  /**
+   * hi_z' = (hi_z[[wz-1:wx-1]
+   *          & sext(redand (lo_z[wz-1:wx-1]), wn)
+   *          & sext(hi_x[wx-1:wx-1], wn))
+   *         :: (hi_z[wx-2:0] & hi_x[wx-2:0])
+   */
+  tmp0 = hi_x_lsb ? btor_bv_ones (mm, wn + 1) : btor_bv_zero (mm, wn + 1);
+  tmp1 = btor_bv_and (mm, slice_hi_z_hi, tmp0);
+  btor_bv_free (mm, tmp0);
+  tmp2 = btor_bv_sext (mm, redand, wn);
+  tmp0 = btor_bv_and (mm, tmp1, tmp2);
+  btor_bv_free (mm, tmp1);
+  btor_bv_free (mm, tmp2);
+  if (wx > 1)
+  {
+    (*res_d_z)->hi = btor_bv_concat (mm, tmp0, x_and_z);
+    btor_bv_free (mm, tmp0);
+  }
+  else
+  {
+    (*res_d_z)->hi = tmp0;
+  }
+
+  if (wx > 1)
+  {
+    btor_bv_free (mm, x_or_z);
+    btor_bv_free (mm, x_and_z);
+    btor_bv_free (mm, slice_lo_z_hi);
+    btor_bv_free (mm, slice_hi_z_hi);
+  }
+  btor_bv_free (mm, redor);
+  btor_bv_free (mm, redand);
+
+#if 0
+  /* These are the propagators from [1] which are incorrect!
+   * E.g. for x = 1 and z = 001 we expect an invalid result, but these
+   * propagators produce x' = 1 and z' = 111. */
+
+  uint32_t i, lo_z_bit, hi_z_bit;
+  BtorBvDomain *tmp_x = btor_bvprop_new (mm, d_x->lo, d_x->hi);
+
+  /**
+   * lo_x' = lo_x | (lo_z & mask1) with mask1 = 0_[wn] :: ~0_[wx]
+   * simplifies to
+   * lo_x' = lo_x | lo_z[wx-1:0]
+   */
+  slice = btor_bv_slice (mm, d_z->lo, wx-1, 0);
+  (*res_tmp_x)->lo = btor_bv_or (mm, tmp_x->lo, slice);
+  btor_bv_free (mm, slice);
+
+  /**
+   * hi_x' = hi_x & (hi_z & mask1)
+   * simplifies to
+   * hi_x' = hi_x & hi_z[wx-1:0]
+   */
+  slice = btor_bv_slice (mm, d_z->hi, wx-1, 0);
+  (*res_tmp_x)->hi = btor_bv_and (mm, tmp_x->hi, slice);
+  btor_bv_free (mm, slice);
+
+  if (!lo_x_lsb && !hi_x_lsb)     /* sign bit 0 */
+  {
+SEXT_SIGN_0:
+    /**
+     * lo_z' = (lo_x | mask2) | lo_z with mask2 = 0_[wx+wn]
+     * simplifies to
+     * lo_x' = uext(lo_x, wn) | lo_z
+     */
+    tmp0 = btor_bv_uext(mm, tmp_x->lo, wn);
+    (*res_d_z)->lo = btor_bv_or (mm, d_z->lo, tmp0);
+    btor_bv_free (mm, tmp0);
+
+    /**
+     * hi_z' = (hi_x | mask2) & hi_z
+     * simplifies to
+     * hi_z' = uext(hi_x, wn) & hi_z
+     */
+    tmp0 = btor_bv_uext(mm, tmp_x->hi, wn);
+    (*res_d_z)->hi = btor_bv_and (mm, d_z->hi, tmp0);
+    btor_bv_free (mm, tmp0);
+  }
+  else if (lo_x_lsb && hi_x_lsb)  /* sign bit 1 */
+  {
+SEXT_SIGN_1:
+    tmp0 = btor_bv_ones (mm, wn);
+    /**
+     * lo_z' = lo_x | mask2 with mask2 = ~0_[wn] :: 0_[wx]
+     * simplifies to
+     * lo_z' = ~0_[wn] :: lo_x
+     */
+    (*res_d_z)->lo = btor_bv_concat (mm, tmp0, tmp_x->lo);
+    /**
+     * hi_z' = hi_x | mask2
+     * simplifies to
+     * hi_z' = ~0_[wn] :: hi_x
+     */
+    (*res_d_z)->hi = btor_bv_concat (mm, tmp0, tmp_x->hi);
+    btor_bv_free (mm, tmp0);
+  }
+  else                            /* sign bit x */
+  {
+    assert (!lo_x_lsb && hi_x_lsb);
+
+    for (i = wz - 1; i >= wx - 1; i--)
+    {
+      lo_z_bit = btor_bv_get_bit (d_z->lo, i);
+      hi_z_bit = btor_bv_get_bit (d_z->hi, i);
+      /* if exists z_i = 0 with i >= wx - 1 apply rule for zero sign bit */
+      if (!lo_z_bit && !hi_z_bit)
+      {
+        btor_bv_set_bit (tmp_x->lo, wx - 1, 0);
+        goto SEXT_SIGN_0;
+      }
+      /* if exists z_i = 1 with i >= wx - 1 apply rule for one sign bit */
+      if (lo_z_bit && hi_z_bit)
+      {
+        btor_bv_set_bit (tmp_x->lo, wx - 1, 1);
+        goto SEXT_SIGN_1;
+      }
+    }
+    /**
+     * lo_z' = lo_z | (lo_x | mask3) with mask3 = 0_[wz]
+     * simplifies to
+     * lo_x' = lo_z | uext(lo_x, wn)
+     */
+    tmp0 = btor_bv_uext (mm, tmp_x->lo, wn);
+    (*res_d_x)->lo = btor_bv_or (mm, d_z->lo, tmp0);
+    btor_bv_free (mm, tmp0);
+
+    /**
+     * hi_z' = hi_z & (hi_x | mask2) with mask2 = ~0_[wn] :: 0_[wx]
+     * simplifies to
+     * hi_z' = hi_z & (~0_[wn] :: hi_x)
+     */
+    tmp0 = btor_bv_ones (mm, wn);
+    tmp1 = btor_bv_concat (mm, tmp0, tmp_x->hi);
+    (*res_d_x)->lo = btor_bv_and (mm, d_z->hi, tmp1);
+    btor_bv_free (mm, tmp0);
+    btor_bv_free (mm, tmp1);
+  }
+  btor_bvprop_free (mm, tmp_x);
+#endif
+  return btor_bvprop_is_valid (mm, *res_d_x)
+         && btor_bvprop_is_valid (mm, *res_d_z);
+}
+
 static bool
 made_progress (BtorBvDomain *d_x,
                BtorBvDomain *d_y,
