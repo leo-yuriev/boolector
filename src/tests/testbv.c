@@ -1096,6 +1096,10 @@ static void
 test_uext_bitvec (void)
 {
   ext_bitvec (btor_bv_uext, BTOR_TEST_BITVEC_TESTS, 2);
+  ext_bitvec (btor_bv_uext, BTOR_TEST_BITVEC_TESTS, 3);
+  ext_bitvec (btor_bv_uext, BTOR_TEST_BITVEC_TESTS, 4);
+  ext_bitvec (btor_bv_uext, BTOR_TEST_BITVEC_TESTS, 5);
+  ext_bitvec (btor_bv_uext, BTOR_TEST_BITVEC_TESTS, 6);
   ext_bitvec (btor_bv_uext, BTOR_TEST_BITVEC_TESTS, 7);
   ext_bitvec (btor_bv_uext, BTOR_TEST_BITVEC_TESTS, 31);
   ext_bitvec (btor_bv_uext, BTOR_TEST_BITVEC_TESTS, 33);
@@ -1106,6 +1110,10 @@ static void
 test_sext_bitvec (void)
 {
   ext_bitvec (btor_bv_sext, BTOR_TEST_BITVEC_TESTS, 2);
+  ext_bitvec (btor_bv_sext, BTOR_TEST_BITVEC_TESTS, 3);
+  ext_bitvec (btor_bv_sext, BTOR_TEST_BITVEC_TESTS, 4);
+  ext_bitvec (btor_bv_sext, BTOR_TEST_BITVEC_TESTS, 5);
+  ext_bitvec (btor_bv_sext, BTOR_TEST_BITVEC_TESTS, 6);
   ext_bitvec (btor_bv_sext, BTOR_TEST_BITVEC_TESTS, 7);
   ext_bitvec (btor_bv_sext, BTOR_TEST_BITVEC_TESTS, 31);
   ext_bitvec (btor_bv_sext, BTOR_TEST_BITVEC_TESTS, 33);
