@@ -633,10 +633,8 @@ btor_bvprop_concat (BtorMemMgr *mm,
   assert (res_d_z);
 
   bool res;
-  uint32_t wx, wy, wz;
+  uint32_t wy, wz;
 
-  wx = d_x->hi->width;
-  assert (wx == d_x->lo->width);
   wy = d_y->hi->width;
   assert (wy == d_y->lo->width);
   wz = d_z->hi->width;
@@ -645,8 +643,12 @@ btor_bvprop_concat (BtorMemMgr *mm,
 #if 0
   /* These are the propagators as proposed in [1]. */
 
+  uint32_t wx;
   BtorBitVector *mask, *zero, *ones, *tmp0, *tmp1;
   BtorBitVector *lo_x, *hi_x, *lo_y, *hi_y;
+
+  wx = d_x->hi->width;
+  assert (wx == d_x->lo->width);
 
   lo_x = btor_bv_uext (mm, d_x->lo, wz - wx);
   hi_x = btor_bv_uext (mm, d_x->hi, wz - wx);
@@ -1076,34 +1078,14 @@ made_progress (BtorBvDomain *d_x,
   assert (res_d_z);
   assert (!d_y || res_d_y);
 
-  uint32_t i;
-  uint32_t bw = d_x->lo->width;
-  assert (bw == d_x->hi->width);
-  assert (!d_y || bw == d_y->lo->width);
-  assert (!d_y || bw == d_y->hi->width);
-  assert (bw == d_z->lo->width);
-  assert (bw == d_z->hi->width);
-
-  for (i = 0; i < bw; i++)
-  {
-    // TODO use bv_compare
-    if (btor_bv_get_bit (d_x->lo, i) != btor_bv_get_bit (res_d_x->lo, i)
-        || btor_bv_get_bit (d_x->hi, i) != btor_bv_get_bit (res_d_x->hi, i))
-      return true;
-    if (d_y
-        && (btor_bv_get_bit (d_y->lo, i) != btor_bv_get_bit (res_d_y->lo, i)
-            || btor_bv_get_bit (d_y->hi, i)
-                   != btor_bv_get_bit (res_d_y->hi, i)))
-      return true;
-    if (btor_bv_get_bit (d_z->lo, i) != btor_bv_get_bit (res_d_z->lo, i)
-        || btor_bv_get_bit (d_z->hi, i) != btor_bv_get_bit (res_d_z->hi, i))
-      return true;
-    if (d_c
-        && (btor_bv_get_bit (d_c->lo, i) != btor_bv_get_bit (res_d_c->lo, i)
-            || btor_bv_get_bit (d_c->hi, i)
-                   != btor_bv_get_bit (res_d_c->hi, i)))
-      return true;
-  }
+  if (btor_bv_compare (d_x->lo, res_d_x->lo)) return true;
+  if (btor_bv_compare (d_x->hi, res_d_x->hi)) return true;
+  if (d_y && btor_bv_compare (d_y->lo, res_d_y->lo)) return true;
+  if (d_y && btor_bv_compare (d_y->hi, res_d_y->hi)) return true;
+  if (btor_bv_compare (d_z->lo, res_d_z->lo)) return true;
+  if (btor_bv_compare (d_z->hi, res_d_z->hi)) return true;
+  if (d_c && btor_bv_compare (d_c->lo, res_d_c->lo)) return true;
+  if (d_c && btor_bv_compare (d_c->hi, res_d_c->hi)) return true;
   return false;
 }
 
