@@ -122,6 +122,11 @@ option(ONLY_PICOSAT   "Only use PicoSAT" OFF)
 
 # Automatically build shared libraries if Python bindings are enabled.
 if(PYTHON)
+  find_package(PythonInterp REQUIRED)
+  # Explicitly check for a compatible version of Python libs.
+  find_package(PythonLibs
+    ${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR} REQUIRED)
+
   # Produce a python module that only links against system libraries. SAT
   # solvers and libboolector should be included in the module itself.
   if(NOT SHARED)
