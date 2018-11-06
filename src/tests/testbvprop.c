@@ -1459,6 +1459,79 @@ test_add_bvprop ()
   }
 }
 
+void
+test_mul_bvprop ()
+{
+  bool res;
+  BtorBitVector *tmp;
+  BtorBvDomain *d_x, *d_y, *d_z;
+  BtorBvDomain *res_x, *res_y, *res_z;
+
+  for (size_t i = 0; i < TEST_NUM_CONSTS; i++)
+  {
+    d_z = create_domain (g_consts[i]);
+    for (size_t j = 0; j < TEST_NUM_CONSTS; j++)
+    {
+      d_x = create_domain (g_consts[j]);
+      for (size_t k = 0; k < TEST_NUM_CONSTS; k++)
+      {
+        d_y = create_domain (g_consts[k]);
+
+        res = btor_bvprop_mul (g_mm, d_x, d_y, d_z, &res_x, &res_y, &res_z);
+        check_sat (d_x,
+                   d_y,
+                   d_z,
+                   0,
+                   res_x,
+                   res_y,
+                   res_z,
+                   0,
+                   0,
+                   boolector_mul,
+                   0,
+                   0,
+                   0,
+                   true,
+                   res);
+
+        if (btor_bvprop_is_fixed (g_mm, d_x)
+            && btor_bvprop_is_fixed (g_mm, d_y))
+        {
+          assert (btor_bvprop_is_fixed (g_mm, res_x));
+          assert (btor_bvprop_is_fixed (g_mm, res_y));
+          if (is_xxx_domain (g_mm, d_z))
+          {
+            tmp = btor_bv_mul (g_mm, res_x->lo, res_y->lo);
+            assert (!btor_bv_compare (d_x->lo, res_x->lo));
+            assert (!btor_bv_compare (d_y->lo, res_y->lo));
+            assert (btor_bvprop_is_fixed (g_mm, res_z));
+            assert (!btor_bv_compare (tmp, res_z->lo));
+            btor_bv_free (g_mm, tmp);
+          }
+          else if (btor_bvprop_is_fixed (g_mm, d_z))
+          {
+            assert (btor_bvprop_is_fixed (g_mm, res_z));
+            tmp = btor_bv_mul (g_mm, d_x->lo, d_y->lo);
+            if (!btor_bv_compare (tmp, d_z->lo))
+            {
+              assert (!btor_bv_compare (d_x->lo, res_x->lo));
+              assert (!btor_bv_compare (d_y->lo, res_y->lo));
+              btor_bv_free (g_mm, tmp);
+              tmp = btor_bv_mul (g_mm, res_x->lo, res_y->lo);
+              assert (!btor_bv_compare (tmp, res_z->lo));
+            }
+            btor_bv_free (g_mm, tmp);
+          }
+        }
+
+        btor_bvprop_free (g_mm, d_y);
+        TEST_BVPROP_RELEASE_RES_XYZ;
+      }
+      btor_bvprop_free (g_mm, d_x);
+    }
+    btor_bvprop_free (g_mm, d_z);
+  }
+}
 /*------------------------------------------------------------------------*/
 
 void
@@ -1477,8 +1550,9 @@ run_bvprop_tests (int32_t argc, char **argv)
   BTOR_RUN_TEST (slice_bvprop);
   BTOR_RUN_TEST (concat_bvprop);
   BTOR_RUN_TEST (sext_bvprop);
-  BTOR_RUN_TEST (add_bvprop);
   BTOR_RUN_TEST (ite_bvprop);
+  BTOR_RUN_TEST (add_bvprop);
+  BTOR_RUN_TEST (mul_bvprop);
 }
 
 void

@@ -17,6 +17,8 @@
 #include "btorbvprop.h"
 #include <stdio.h>
 
+BTOR_DECLARE_STACK (BtorBvDomainPtr, BtorBvDomain*);
+
 static BtorBvDomain *
 new_domain (BtorMemMgr *mm)
 {
@@ -1588,6 +1590,296 @@ DONE:
   btor_bvprop_free (mm, tmp_cin_and_x_xor_y);
 
   btor_bv_free (mm, one);
+
+  return res;
+}
+
+bool
+btor_bvprop_mul (BtorMemMgr *mm,
+                 BtorBvDomain *d_x,
+                 BtorBvDomain *d_y,
+                 BtorBvDomain *d_z,
+                 BtorBvDomain **res_d_x,
+                 BtorBvDomain **res_d_y,
+                 BtorBvDomain **res_d_z)
+{
+  assert (mm);
+  assert (d_x);
+  assert (btor_bvprop_is_valid (mm, d_x));
+  assert (d_y);
+  assert (btor_bvprop_is_valid (mm, d_y));
+  assert (d_z);
+  assert (btor_bvprop_is_valid (mm, d_z));
+  assert (res_d_x);
+  assert (res_d_y);
+  assert (res_d_z);
+
+  /* z_[bw] = x_[bw] * y_[bw]
+   * rewrites to
+   * ite (y[bw-1:bw-1], x << (bw - 1), 0)
+   *   + ite (y[bw-2:bw-2], x << (bw-2), 0)
+   *   + ...
+   *   + ite (y[1:1], x << 1, 0)
+   *   + ite (y[0:0], x, 0)
+   */
+
+  uint32_t i, idx, bw;
+  bool res, progress;
+  BtorBitVector *bv;
+  BtorBvDomain *d, *tmp_x, *tmp_y, *tmp_z, *tmp_zero;
+  BtorBvDomain **tmp_c, **tmp_shift, **tmp_ite, **tmp0, **tmp1, **tmp_add;
+  BtorBvDomain *tmp_res_c;
+  BtorBvDomainPtrStack d_c_stack, d_shift_stack, d_ite_stack, d_add_stack;
+  BtorBitVectorPtrStack shift_stack;
+
+  res = true;
+
+  BTOR_INIT_STACK (mm, d_c_stack);
+  BTOR_INIT_STACK (mm, d_shift_stack);
+  BTOR_INIT_STACK (mm, d_ite_stack);
+  BTOR_INIT_STACK (mm, d_add_stack);
+  BTOR_INIT_STACK (mm, shift_stack);
+
+  bw = d_x->lo->width;
+  assert (bw == d_x->hi->width);
+  assert (bw == d_y->lo->width);
+  assert (bw == d_y->hi->width);
+  assert (bw == d_z->lo->width);
+  assert (bw == d_z->hi->width);
+
+  bv = btor_bv_zero (mm, bw);
+  tmp_zero = btor_bvprop_new (mm, bv, bv);
+  btor_bv_free (mm, bv);
+
+  if (bw == 1)
+  {
+    /* multiplication simplifies to d_z = ite (d_y, x, 0) */
+    if (!btor_bvprop_ite (
+            mm, d_y, d_x, tmp_zero, d_z, &tmp_res_c, res_d_x, res_d_y, res_d_z))
+    {
+      res = false;
+      btor_bvprop_free (mm, *res_d_x);
+      btor_bvprop_free (mm, *res_d_y);
+      btor_bvprop_free (mm, *res_d_z);
+      goto DONE;
+    }
+    tmp_x = *res_d_x;
+    tmp_y = tmp_res_c;
+    tmp_z = *res_d_z;
+  }
+  else
+  {
+    for (i = 0; i < bw; i++)
+    {
+      /* slice y into bw ite conditions */
+      d = new_domain (mm);
+      idx = bw - 1 - i;
+      d->lo = btor_bv_slice (mm, d_y->lo, idx, idx);
+      d->hi = btor_bv_slice (mm, d_y->hi, idx, idx);
+      BTOR_PUSH_STACK (d_c_stack, d);
+      /* bw shift propagators */
+      d = btor_bvprop_new_init (mm, bw);
+      BTOR_PUSH_STACK (d_shift_stack, d);
+      /* bw ite propagators */
+      d = btor_bvprop_new_init (mm, bw);
+      BTOR_PUSH_STACK (d_ite_stack, d);
+      /* bw - 1 add propagators */
+      if (i == bw - 1)
+      {
+        /* last adder is end result: d_z = add_[bw-1]*/
+        d = btor_bvprop_new (mm, d_z->lo, d_z->hi);
+        BTOR_PUSH_STACK (d_add_stack, d);
+      }
+      else if (i > 0)
+      {
+        d = btor_bvprop_new_init (mm, bw);
+        BTOR_PUSH_STACK (d_add_stack, d);
+      }
+      /* shift width */
+      bv = btor_bv_uint64_to_bv(mm, bw - 1 - i, bw);
+      BTOR_PUSH_STACK (shift_stack, bv);
+    }
+
+    tmp_x = btor_bvprop_new (mm, d_x->lo, d_x->hi);
+    tmp_y = btor_bvprop_new (mm, d_y->lo, d_y->hi);
+    tmp_z = btor_bvprop_new (mm, d_z->lo, d_z->hi);
+
+    do
+    {
+      progress = false;
+
+      for (i = 0; i < bw; i++)
+      {
+        /* x << bw - 1 - i */
+        bv = BTOR_PEEK_STACK (shift_stack, i);
+        tmp_shift = &d_shift_stack.start[i];
+        if (!btor_bvprop_sll_const(mm, tmp_x, *tmp_shift, bv, res_d_x, res_d_z))
+        {
+          res = false;
+          btor_bvprop_free (mm, *res_d_x);
+          btor_bvprop_free (mm, *res_d_z);
+          goto DONE;
+        }
+        assert (btor_bvprop_is_valid (mm, *res_d_x));
+        assert (btor_bvprop_is_valid (mm, *res_d_z));
+        if (!progress)
+        {
+          progress =
+              made_progress (tmp_x, 0, *tmp_shift, 0, *res_d_x, 0, *res_d_z, 0);
+        }
+        btor_bvprop_free (mm, tmp_x);
+        btor_bvprop_free (mm, *tmp_shift);
+        tmp_x = *res_d_x;
+        *tmp_shift = *res_d_z;
+
+        /* ite (y[bw-1-i:bw-1-i], x << bw - 1 - i, 0) */
+        tmp_c = &d_c_stack.start[i];
+        tmp_ite = &d_ite_stack.start[i];
+        if (!btor_bvprop_ite (mm,
+                              *tmp_c,
+                              *tmp_shift,
+                              tmp_zero,
+                              *tmp_ite,
+                              &tmp_res_c,
+                              res_d_x,
+                              res_d_y,
+                              res_d_z))
+        {
+          res = false;
+          btor_bvprop_free (mm, tmp_res_c);
+          btor_bvprop_free (mm, *res_d_x);
+          btor_bvprop_free (mm, *res_d_y);
+          btor_bvprop_free (mm, *res_d_z);
+          goto DONE;
+        }
+        assert (btor_bvprop_is_valid (mm, *res_d_x));
+        assert (btor_bvprop_is_valid (mm, *res_d_y));
+        assert (btor_bvprop_is_valid (mm, *res_d_z));
+        assert (btor_bvprop_is_valid (mm, tmp_res_c));
+        if (!progress)
+        {
+          progress = made_progress (*tmp_shift,
+                                    tmp_zero,
+                                    *tmp_ite,
+                                    *tmp_c,
+                                    *res_d_x,
+                                    *res_d_y,
+                                    *res_d_z,
+                                    tmp_res_c);
+        }
+        btor_bvprop_free (mm, *tmp_shift);
+        assert (!btor_bv_compare (tmp_zero->lo, (*res_d_y)->lo)
+                && !btor_bv_compare (tmp_zero->hi, (*res_d_y)->hi));
+        btor_bvprop_free (mm, *tmp_c);
+        btor_bvprop_free (mm, *tmp_ite);
+        *tmp_shift = *res_d_x;
+        btor_bvprop_free (mm, *res_d_y);
+        *tmp_ite = *res_d_z;
+        *tmp_c = tmp_res_c;
+
+        /**
+         * ite (y[bw-1:bw-1], x << (bw - 1), 0)
+         *   + ite (y[bw-2:bw-2], x << (bw-2), 0)
+         *   + ...
+         *   + ite (y[1:1], x << 1, 0)
+         *   + ite (y[0:0], x, 0)
+         */
+        if (i > 0)
+        {
+          tmp0 = i == 1 ? &d_ite_stack.start[i-1] : &d_add_stack.start[i-2];
+          tmp1 = tmp_ite;
+          tmp_add = &d_add_stack.start[i-1];
+          if (!btor_bvprop_add (mm,
+                                *tmp0,
+                                *tmp1,
+                                *tmp_add,
+                                res_d_x,
+                                res_d_y,
+                                res_d_z))
+          {
+            res = false;
+            btor_bvprop_free (mm, *res_d_x);
+            btor_bvprop_free (mm, *res_d_y);
+            btor_bvprop_free (mm, *res_d_z);
+            goto DONE;
+          }
+          assert (btor_bvprop_is_valid (mm, *res_d_x));
+          assert (btor_bvprop_is_valid (mm, *res_d_y));
+          assert (btor_bvprop_is_valid (mm, *res_d_z));
+          if (!progress)
+          {
+            progress = made_progress (*tmp0,
+                                      *tmp1,
+                                      *tmp_add,
+                                      0,
+                                      *res_d_x,
+                                      *res_d_y,
+                                      *res_d_z,
+                                      0);
+          }
+          btor_bvprop_free (mm, *tmp0);
+          btor_bvprop_free (mm, *tmp1);
+          btor_bvprop_free (mm, *tmp_add);
+          *tmp0 = *res_d_x;
+          *tmp1 = *res_d_y;
+          *tmp_add = *res_d_z;
+        }
+      }
+    } while (progress);
+
+    for (i = 0; i < bw; i++)
+    {
+      idx = bw - 1 - i;
+      d = BTOR_PEEK_STACK (d_c_stack, i);
+      assert (d->lo->width == 1);
+      assert (d->hi->width == 1);
+      btor_bv_set_bit (tmp_y->lo, idx, btor_bv_get_bit (d->lo, 0));
+      btor_bv_set_bit (tmp_y->hi, idx, btor_bv_get_bit (d->hi, 0));
+    }
+    btor_bvprop_free (mm, tmp_z);
+    tmp_z = new_domain (mm);
+    if (bw > 1)
+    {
+      tmp_z->lo = btor_bv_copy (mm, d_add_stack.start[bw-2]->lo);
+      tmp_z->hi = btor_bv_copy (mm, d_add_stack.start[bw-2]->hi);
+    }
+    else
+    {
+      tmp_z->lo = btor_bv_copy (mm, d_ite_stack.start[0]->lo);
+      tmp_z->hi = btor_bv_copy (mm, d_ite_stack.start[0]->hi);
+    }
+  }
+  assert (btor_bvprop_is_valid (mm, tmp_x));
+  assert (btor_bvprop_is_valid (mm, tmp_y));
+  assert (btor_bvprop_is_valid (mm, tmp_z));
+DONE:
+  *res_d_x = tmp_x;
+  *res_d_y = tmp_y;
+  *res_d_z = tmp_z;
+
+  btor_bvprop_free (mm, tmp_zero);
+
+  for (i = 0; i < bw; i++)
+  {
+    assert (!BTOR_EMPTY_STACK (d_c_stack));
+    assert (!BTOR_EMPTY_STACK (d_shift_stack));
+    assert (!BTOR_EMPTY_STACK (d_ite_stack));
+    assert (!BTOR_EMPTY_STACK (shift_stack));
+    btor_bvprop_free (mm, BTOR_POP_STACK (d_c_stack));
+    btor_bvprop_free (mm, BTOR_POP_STACK (d_shift_stack));
+    btor_bvprop_free (mm, BTOR_POP_STACK (d_ite_stack));
+    btor_bv_free (mm, BTOR_POP_STACK (shift_stack));
+    if (i < bw - 1)
+    {
+      assert (!BTOR_EMPTY_STACK (d_add_stack));
+      btor_bvprop_free (mm, BTOR_POP_STACK (d_add_stack));
+    }
+  }
+  BTOR_RELEASE_STACK (d_c_stack);
+  BTOR_RELEASE_STACK (d_shift_stack);
+  BTOR_RELEASE_STACK (d_ite_stack);
+  BTOR_RELEASE_STACK (d_add_stack);
+  BTOR_RELEASE_STACK (shift_stack);
 
   return res;
 }
