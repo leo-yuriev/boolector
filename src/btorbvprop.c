@@ -1623,7 +1623,7 @@ btor_bvprop_mul (BtorMemMgr *mm,
    *   + ite (y[0:0], x, 0)
    */
 
-  uint32_t i, idx, bw;
+  uint32_t i, bw, n;
   bool res, progress;
   BtorBitVector *bv;
   BtorBvDomain *d, *tmp_x, *tmp_y, *tmp_z, *tmp_zero;
@@ -1647,13 +1647,13 @@ btor_bvprop_mul (BtorMemMgr *mm,
   assert (bw == d_z->lo->width);
   assert (bw == d_z->hi->width);
 
-  bv = btor_bv_zero (mm, bw);
+  bv       = btor_bv_zero (mm, bw);
   tmp_zero = btor_bvprop_new (mm, bv, bv);
   btor_bv_free (mm, bv);
 
   if (bw == 1)
   {
-    /* multiplication simplifies to d_z = ite (d_y, x, 0) */
+    /* For bit-width 1, multiplication simplifies to d_z = ite (d_y, x, 0) */
     if (!btor_bvprop_ite (
             mm, d_y, d_x, tmp_zero, d_z, &tmp_res_c, res_d_x, res_d_y, res_d_z))
     {
@@ -1669,36 +1669,84 @@ btor_bvprop_mul (BtorMemMgr *mm,
   }
   else
   {
+    /**
+     * The full implementation of
+     *   ite (y[bw-1:bw-1], x << (bw - 1), 0)
+     *     + ite (y[bw-2:bw-2], x << (bw-2), 0)
+     *     + ...
+     *     + ite (y[1:1], x << 1, 0)
+     *     + ite (y[0:0], x, 0)
+     * would require n left shift propagators, n ite propagators, and n - 1
+     * add propagators (n = bw).
+     * We can simplify that since for each ite, the initial result domain is
+     * x...x = ite (condition, shift, 0). If the y bit at an index i (and
+     * therefore the condition for the i-th ite) is 0, the result of the ite
+     * is always 0 (that's the only possible propagation, no invalid results
+     * possible). Hence we can skip all 0 bits of y (i.e., all ite with a 0
+     * condition), except the last one (the last one is the end result).
+     */
+
     for (i = 0; i < bw; i++)
     {
+      n = bw - 1 - i;
+
+      /* if y bit is zero, the result of the ite is zero, skip */
+      if (i < bw - 1 && !btor_bv_get_bit (d_y->lo, n)
+          && !btor_bv_get_bit (d_y->hi, n))
+        continue;
+
       /* slice y into bw ite conditions */
-      d = new_domain (mm);
-      idx = bw - 1 - i;
-      d->lo = btor_bv_slice (mm, d_y->lo, idx, idx);
-      d->hi = btor_bv_slice (mm, d_y->hi, idx, idx);
+      d     = new_domain (mm);
+      d->lo = btor_bv_slice (mm, d_y->lo, n, n);
+      d->hi = btor_bv_slice (mm, d_y->hi, n, n);
       BTOR_PUSH_STACK (d_c_stack, d);
-      /* bw shift propagators */
+      /* m shift propagators (m = number of 1 or x bits in y) */
       d = btor_bvprop_new_init (mm, bw);
       BTOR_PUSH_STACK (d_shift_stack, d);
-      /* bw ite propagators */
+      /* m ite propagators */
       d = btor_bvprop_new_init (mm, bw);
       BTOR_PUSH_STACK (d_ite_stack, d);
-      /* bw - 1 add propagators */
-      if (i == bw - 1)
-      {
-        /* last adder is end result: d_z = add_[bw-1]*/
-        d = btor_bvprop_new (mm, d_z->lo, d_z->hi);
-        BTOR_PUSH_STACK (d_add_stack, d);
-      }
-      else if (i > 0)
+      /* m - 1 add propagators */
+      if (BTOR_COUNT_STACK (d_c_stack) > 1)
       {
         d = btor_bvprop_new_init (mm, bw);
         BTOR_PUSH_STACK (d_add_stack, d);
       }
       /* shift width */
-      bv = btor_bv_uint64_to_bv(mm, bw - 1 - i, bw);
+      bv = btor_bv_uint64_to_bv (mm, n, bw);
       BTOR_PUSH_STACK (shift_stack, bv);
     }
+
+    /**
+     * if m > 0: final add is end result
+     * else    : there is a single ite which is the end result
+     */
+    if (BTOR_COUNT_STACK (d_add_stack))
+    {
+      /* last adder is end result: d_z = add_[m-1]*/
+      d = btor_bvprop_new (mm, d_z->lo, d_z->hi);
+      btor_bvprop_free (mm, BTOR_POP_STACK (d_add_stack));
+      BTOR_PUSH_STACK (d_add_stack, d);
+    }
+    else
+    {
+      /**
+       * We have at least one ite propagator, even if all bits in y are 0.
+       * In case there is only a single ite propagator, it is the end result.
+       */
+      assert (BTOR_COUNT_STACK (d_ite_stack) == 1);
+      if (BTOR_COUNT_STACK (d_ite_stack))
+      {
+        d = btor_bvprop_new (mm, d_z->lo, d_z->hi);
+        btor_bvprop_free (mm, BTOR_POP_STACK (d_ite_stack));
+        BTOR_PUSH_STACK (d_ite_stack, d);
+      }
+    }
+
+    assert (BTOR_COUNT_STACK (d_c_stack) == BTOR_COUNT_STACK (d_shift_stack));
+    assert (BTOR_COUNT_STACK (d_c_stack) == BTOR_COUNT_STACK (d_ite_stack));
+    assert (BTOR_COUNT_STACK (d_c_stack) == BTOR_COUNT_STACK (d_add_stack) + 1);
+    assert (BTOR_COUNT_STACK (d_c_stack) == BTOR_COUNT_STACK (shift_stack));
 
     tmp_x = btor_bvprop_new (mm, d_x->lo, d_x->hi);
     tmp_y = btor_bvprop_new (mm, d_y->lo, d_y->hi);
@@ -1708,12 +1756,18 @@ btor_bvprop_mul (BtorMemMgr *mm,
     {
       progress = false;
 
-      for (i = 0; i < bw; i++)
+      for (i = 0; i < BTOR_COUNT_STACK (d_c_stack); i++)
       {
-        /* x << bw - 1 - i */
-        bv = BTOR_PEEK_STACK (shift_stack, i);
+        /**
+         * x << bw - 1 - m where m is the current bit index.
+         * The shift width of the current bit index (!= i) is stored at index i.
+         * The current bit index is not explicit here, since we only generate
+         * propagators for bits that 1/x (or for the last 0 bit if y = 0).
+         */
+        bv        = BTOR_PEEK_STACK (shift_stack, i);
         tmp_shift = &d_shift_stack.start[i];
-        if (!btor_bvprop_sll_const(mm, tmp_x, *tmp_shift, bv, res_d_x, res_d_z))
+        if (!btor_bvprop_sll_const (
+                mm, tmp_x, *tmp_shift, bv, res_d_x, res_d_z))
         {
           res = false;
           btor_bvprop_free (mm, *res_d_x);
@@ -1729,11 +1783,11 @@ btor_bvprop_mul (BtorMemMgr *mm,
         }
         btor_bvprop_free (mm, tmp_x);
         btor_bvprop_free (mm, *tmp_shift);
-        tmp_x = *res_d_x;
+        tmp_x      = *res_d_x;
         *tmp_shift = *res_d_z;
 
-        /* ite (y[bw-1-i:bw-1-i], x << bw - 1 - i, 0) */
-        tmp_c = &d_c_stack.start[i];
+        /* ite (y[bw-1-m:bw-1-m], x << bw - 1 - m, 0) */
+        tmp_c   = &d_c_stack.start[i];
         tmp_ite = &d_ite_stack.start[i];
         if (!btor_bvprop_ite (mm,
                               *tmp_c,
@@ -1775,7 +1829,7 @@ btor_bvprop_mul (BtorMemMgr *mm,
         *tmp_shift = *res_d_x;
         btor_bvprop_free (mm, *res_d_y);
         *tmp_ite = *res_d_z;
-        *tmp_c = tmp_res_c;
+        *tmp_c   = tmp_res_c;
 
         /**
          * ite (y[bw-1:bw-1], x << (bw - 1), 0)
@@ -1783,19 +1837,17 @@ btor_bvprop_mul (BtorMemMgr *mm,
          *   + ...
          *   + ite (y[1:1], x << 1, 0)
          *   + ite (y[0:0], x, 0)
+         *
+         * Note that we only create ite for bits in y that are 1/x. Thus, we
+         * don't create 'bw' adders but 'm = number of 1/x bits - 1' adders.
          */
         if (i > 0)
         {
-          tmp0 = i == 1 ? &d_ite_stack.start[i-1] : &d_add_stack.start[i-2];
+          tmp0 = i == 1 ? &d_ite_stack.start[i - 1] : &d_add_stack.start[i - 2];
           tmp1 = tmp_ite;
-          tmp_add = &d_add_stack.start[i-1];
-          if (!btor_bvprop_add (mm,
-                                *tmp0,
-                                *tmp1,
-                                *tmp_add,
-                                res_d_x,
-                                res_d_y,
-                                res_d_z))
+          tmp_add = &d_add_stack.start[i - 1];
+          if (!btor_bvprop_add (
+                  mm, *tmp0, *tmp1, *tmp_add, res_d_x, res_d_y, res_d_z))
           {
             res = false;
             btor_bvprop_free (mm, *res_d_x);
@@ -1808,43 +1860,46 @@ btor_bvprop_mul (BtorMemMgr *mm,
           assert (btor_bvprop_is_valid (mm, *res_d_z));
           if (!progress)
           {
-            progress = made_progress (*tmp0,
-                                      *tmp1,
-                                      *tmp_add,
-                                      0,
-                                      *res_d_x,
-                                      *res_d_y,
-                                      *res_d_z,
-                                      0);
+            progress = made_progress (
+                *tmp0, *tmp1, *tmp_add, 0, *res_d_x, *res_d_y, *res_d_z, 0);
           }
           btor_bvprop_free (mm, *tmp0);
           btor_bvprop_free (mm, *tmp1);
           btor_bvprop_free (mm, *tmp_add);
-          *tmp0 = *res_d_x;
-          *tmp1 = *res_d_y;
+          *tmp0    = *res_d_x;
+          *tmp1    = *res_d_y;
           *tmp_add = *res_d_z;
         }
       }
     } while (progress);
 
-    for (i = 0; i < bw; i++)
+    /* Collect y bits into the result for d_y. */
+    for (i = 0, n = 0; i < bw; i++)
     {
-      idx = bw - 1 - i;
-      d = BTOR_PEEK_STACK (d_c_stack, i);
+      if (i < bw - 1 && !btor_bv_get_bit (tmp_y->lo, bw - 1 - i)
+          && !btor_bv_get_bit (tmp_y->hi, bw - 1 - i))
+        continue;
+      assert (n < BTOR_COUNT_STACK (d_c_stack));
+      d = BTOR_PEEK_STACK (d_c_stack, n);
       assert (d->lo->width == 1);
       assert (d->hi->width == 1);
-      btor_bv_set_bit (tmp_y->lo, idx, btor_bv_get_bit (d->lo, 0));
-      btor_bv_set_bit (tmp_y->hi, idx, btor_bv_get_bit (d->hi, 0));
+      btor_bv_set_bit (tmp_y->lo, bw - 1 - i, btor_bv_get_bit (d->lo, 0));
+      btor_bv_set_bit (tmp_y->hi, bw - 1 - i, btor_bv_get_bit (d->hi, 0));
+      n += 1;
     }
+    assert (n == BTOR_COUNT_STACK (d_c_stack));
+
+    /* Result for d_z. */
     btor_bvprop_free (mm, tmp_z);
     tmp_z = new_domain (mm);
-    if (bw > 1)
+    if (n > 1)
     {
-      tmp_z->lo = btor_bv_copy (mm, d_add_stack.start[bw-2]->lo);
-      tmp_z->hi = btor_bv_copy (mm, d_add_stack.start[bw-2]->hi);
+      tmp_z->lo = btor_bv_copy (mm, d_add_stack.start[n - 2]->lo);
+      tmp_z->hi = btor_bv_copy (mm, d_add_stack.start[n - 2]->hi);
     }
     else
     {
+      assert (n == 1);
       tmp_z->lo = btor_bv_copy (mm, d_ite_stack.start[0]->lo);
       tmp_z->hi = btor_bv_copy (mm, d_ite_stack.start[0]->hi);
     }
@@ -1859,7 +1914,7 @@ DONE:
 
   btor_bvprop_free (mm, tmp_zero);
 
-  for (i = 0; i < bw; i++)
+  for (i = 0, n = BTOR_COUNT_STACK (d_c_stack); i < n; i++)
   {
     assert (!BTOR_EMPTY_STACK (d_c_stack));
     assert (!BTOR_EMPTY_STACK (d_shift_stack));
@@ -1869,7 +1924,7 @@ DONE:
     btor_bvprop_free (mm, BTOR_POP_STACK (d_shift_stack));
     btor_bvprop_free (mm, BTOR_POP_STACK (d_ite_stack));
     btor_bv_free (mm, BTOR_POP_STACK (shift_stack));
-    if (i < bw - 1)
+    if (i < n - 1)
     {
       assert (!BTOR_EMPTY_STACK (d_add_stack));
       btor_bvprop_free (mm, BTOR_POP_STACK (d_add_stack));
